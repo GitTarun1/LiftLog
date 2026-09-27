@@ -11,6 +11,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/hooks/use-theme';
 import { MuscleGroup } from '../types/fitness';
 
@@ -34,6 +35,7 @@ const CATEGORIES: { label: string; value: MuscleGroup; icon: keyof typeof Ionico
 
 export function AddExerciseModal({ visible, onClose, onAdd }: AddExerciseModalProps) {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const [name, setName] = useState('');
   const [category, setCategory] = useState<MuscleGroup>('chest');
   const [notes, setNotes] = useState('');
@@ -90,6 +92,7 @@ export function AddExerciseModal({ visible, onClose, onAdd }: AddExerciseModalPr
             {
               backgroundColor: theme.card,
               borderColor: theme.border,
+              paddingBottom: Math.max(insets.bottom + 12, Platform.OS === 'ios' ? 34 : 24),
             },
           ]}
         >

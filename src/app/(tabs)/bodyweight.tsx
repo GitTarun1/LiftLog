@@ -3,13 +3,13 @@ import {
   Alert,
   FlatList,
   Platform,
-  SafeAreaView,
   StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFitness } from '@/context/FitnessContext';
 import { useTheme } from '@/hooks/use-theme';
