@@ -11,13 +11,77 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
+import * as DocumentPicker from 'expo-document-picker';
 import { useFitness } from '@/context/FitnessContext';
 import { useTheme } from '@/hooks/use-theme';
 import { IOSCard } from '@/components/ui/IOSCard';
+import { FitnessStorage } from '@/services/storage';
 
 export default function StreakScreen() {
   const theme = useTheme();
-  const { streakStats, workoutLogs, exercises, userPrefs, resetToDemo } = useFitness();
+  const { streakStats, workoutLogs, exercises, userPrefs, resetToDemo, refreshData } = useFitness();
+  const [isExporting, setIsExporting] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+
+  const handleExportBackup = async () => {
+    setIsExporting(true);
+    try {
+      const json = await FitnessStorage.exportAllData();
+      const dateStr = new Date().toISOString().split('T')[0];
+      const fileName = `liftlog-backup-${dateStr}.json`;
+      const fileUri = FileSystem.cacheDirectory + fileName;
+      await FileSystem.writeAsStringAsync(fileUri, json, { encoding: FileSystem.EncodingType.UTF8 });
+      const canShare = await Sharing.isAvailableAsync();
+      if (canShare) {
+        await Sharing.shareAsync(fileUri, { mimeType: 'application/json', dialogTitle: 'Save LiftLog Backup' });
+      } else {
+        Alert.alert('Exported', `Backup saved to:\n${fileUri}`);
+      }
+    } catch (e: any) {
+      Alert.alert('Export Failed', e?.message || 'Could not export backup.');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleImportBackup = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: 'application/json',
+        copyToCacheDirectory: true,
+      });
+      if (result.canceled || !result.assets?.[0]) return;
+      const fileUri = result.assets[0].uri;
+      Alert.alert(
+        'Restore Backup?',
+        'This will replace ALL current data with the backup. This cannot be undone.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Restore',
+            style: 'destructive',
+            onPress: async () => {
+              setIsImporting(true);
+              try {
+                const json = await FileSystem.readAsStringAsync(fileUri, { encoding: FileSystem.EncodingType.UTF8 });
+                await FitnessStorage.importAllData(json);
+                await refreshData();
+                Alert.alert('✅ Restored', 'Your backup has been restored successfully.');
+              } catch (e: any) {
+                Alert.alert('Import Failed', e?.message || 'Invalid or corrupted backup file.');
+              } finally {
+                setIsImporting(false);
+              }
+            },
+          },
+        ]
+      );
+    } catch (e: any) {
+      Alert.alert('Import Failed', e?.message || 'Could not read the file.');
+    }
+  };
 
   // Active month navigation state
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
@@ -85,7 +149,7 @@ export default function StreakScreen() {
   const todayStr = new Date().toISOString().split('T')[0];
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+    <SafeAreaView edges={['top', 'left', 'right']} style={[styles.container, { backgroundColor: theme.background }]}>
       <StatusBar barStyle={theme.text === '#FFFFFF' ? 'light-content' : 'dark-content'} />
 
       {/* Header */}
@@ -342,7 +406,7 @@ export default function StreakScreen() {
           )}
         </View>
 
-        {/* Local Storage & Reset Demo Footer */}
+        {/* Local Storage, Backup & Reset Footer */}
         <IOSCard style={styles.settingsCard}>
           <View style={styles.storageInfoRow}>
             <Ionicons name="cloud-offline-outline" size={22} color={theme.tint} />
@@ -351,11 +415,48 @@ export default function StreakScreen() {
                 100% Local & Offline
               </Text>
               <Text style={[styles.storageSub, { color: theme.textSecondary }]}>
-                All workouts, exercises, and weights are securely stored on your device.
+                All data is stored on your device. Use backup to transfer data or keep a safe copy.
               </Text>
             </View>
           </View>
 
+          {/* Export Backup */}
+          <TouchableOpacity
+            onPress={handleExportBackup}
+            disabled={isExporting}
+            style={[styles.actionBtn, { borderTopColor: theme.border, borderTopWidth: StyleSheet.hairlineWidth, marginTop: 14 }]}
+          >
+            <Ionicons name="share-outline" size={18} color={theme.tint} />
+            <View style={{ flex: 1, marginLeft: 10 }}>
+              <Text style={[styles.actionBtnTitle, { color: theme.text }]}>
+                {isExporting ? 'Exporting...' : 'Export Backup'}
+              </Text>
+              <Text style={[styles.actionBtnSub, { color: theme.textSecondary }]}>
+                Save a JSON file with all your data
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={theme.textTertiary} />
+          </TouchableOpacity>
+
+          {/* Import / Restore */}
+          <TouchableOpacity
+            onPress={handleImportBackup}
+            disabled={isImporting}
+            style={[styles.actionBtn, { borderTopColor: theme.border, borderTopWidth: StyleSheet.hairlineWidth }]}
+          >
+            <Ionicons name="download-outline" size={18} color='#30D158' />
+            <View style={{ flex: 1, marginLeft: 10 }}>
+              <Text style={[styles.actionBtnTitle, { color: theme.text }]}>
+                {isImporting ? 'Restoring...' : 'Import Backup'}
+              </Text>
+              <Text style={[styles.actionBtnSub, { color: theme.textSecondary }]}>
+                Restore data from a backup file
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={theme.textTertiary} />
+          </TouchableOpacity>
+
+          {/* Reset Demo */}
           <TouchableOpacity
             onPress={handleResetDemo}
             style={[styles.resetBtn, { borderTopColor: theme.border }]}
@@ -380,7 +481,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'android' ? 36 : 10,
+    paddingTop: 8,
     paddingBottom: 12,
   },
   headerSub: {
@@ -632,6 +733,19 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 2,
     lineHeight: 16,
+  },
+  actionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  actionBtnTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  actionBtnSub: {
+    fontSize: 12,
+    marginTop: 1,
   },
   resetBtn: {
     flexDirection: 'row',

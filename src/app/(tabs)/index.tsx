@@ -151,7 +151,7 @@ export default function ExercisesScreen() {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+    <SafeAreaView edges={['top', 'left', 'right']} style={[styles.container, { backgroundColor: theme.background }]}>
       <StatusBar barStyle={theme.text === '#FFFFFF' ? 'light-content' : 'dark-content'} />
 
       {/* iOS Header */}
@@ -277,7 +277,7 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'android' ? 36 : 10,
+    paddingTop: 8,
     paddingBottom: 8,
   },
   headerTop: {

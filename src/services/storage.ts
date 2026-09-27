@@ -399,4 +399,35 @@ export const FitnessStorage = {
       thisMonthCount,
     };
   },
+
+  // --- Backup / Restore ---
+  async exportAllData(): Promise<string> {
+    const [exercises, workoutLogs, bodyWeightEntries, userPrefs] = await Promise.all([
+      this.getExercises(),
+      this.getWorkoutLogs(),
+      this.getBodyWeightEntries(),
+      this.getUserPreferences(),
+    ]);
+    const payload = {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      exercises,
+      workoutLogs,
+      bodyWeightEntries,
+      userPrefs,
+    };
+    return JSON.stringify(payload, null, 2);
+  },
+
+  async importAllData(jsonString: string): Promise<void> {
+    const payload = JSON.parse(jsonString);
+    if (!payload || payload.version !== 1) {
+      throw new Error('Invalid backup file. Expected a LiftLog backup JSON.');
+    }
+    await AsyncStorage.setItem(STORAGE_KEYS.EXERCISES, JSON.stringify(payload.exercises ?? []));
+    await AsyncStorage.setItem(STORAGE_KEYS.WORKOUT_LOGS, JSON.stringify(payload.workoutLogs ?? []));
+    await AsyncStorage.setItem(STORAGE_KEYS.BODY_WEIGHT, JSON.stringify(payload.bodyWeightEntries ?? []));
+    await AsyncStorage.setItem(STORAGE_KEYS.USER_PREFS, JSON.stringify(payload.userPrefs ?? {}));
+    await AsyncStorage.setItem(STORAGE_KEYS.INITIALIZED, 'true');
+  },
 };

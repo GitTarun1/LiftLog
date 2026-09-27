@@ -106,7 +106,7 @@ export default function BodyWeightScreen() {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+    <SafeAreaView edges={['top', 'left', 'right']} style={[styles.container, { backgroundColor: theme.background }]}>
       <StatusBar barStyle={theme.text === '#FFFFFF' ? 'light-content' : 'dark-content'} />
 
       {/* Header */}
@@ -289,7 +289,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'android' ? 36 : 10,
+    paddingTop: 8,
     paddingBottom: 12,
   },
   headerSub: {
