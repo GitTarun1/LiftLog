@@ -1,7 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import {
   FlatList,
-  Platform,
   RefreshControl,
   StatusBar,
   StyleSheet,

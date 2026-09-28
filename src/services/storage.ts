@@ -409,6 +409,7 @@ export const FitnessStorage = {
       this.getUserPreferences(),
     ]);
     const payload = {
+      appName: 'LiftLog',
       version: 1,
       exportedAt: new Date().toISOString(),
       exercises,
@@ -420,14 +421,42 @@ export const FitnessStorage = {
   },
 
   async importAllData(jsonString: string): Promise<void> {
-    const payload = JSON.parse(jsonString);
-    if (!payload || payload.version !== 1) {
-      throw new Error('Invalid backup file. Expected a LiftLog backup JSON.');
+    if (!jsonString || typeof jsonString !== 'string') {
+      throw new Error('Backup data is empty or invalid.');
     }
-    await AsyncStorage.setItem(STORAGE_KEYS.EXERCISES, JSON.stringify(payload.exercises ?? []));
-    await AsyncStorage.setItem(STORAGE_KEYS.WORKOUT_LOGS, JSON.stringify(payload.workoutLogs ?? []));
-    await AsyncStorage.setItem(STORAGE_KEYS.BODY_WEIGHT, JSON.stringify(payload.bodyWeightEntries ?? []));
-    await AsyncStorage.setItem(STORAGE_KEYS.USER_PREFS, JSON.stringify(payload.userPrefs ?? {}));
+    let payload: any;
+    try {
+      payload = JSON.parse(jsonString);
+    } catch {
+      throw new Error('Could not parse backup file as JSON.');
+    }
+
+    if (!payload || typeof payload !== 'object') {
+      throw new Error('Invalid backup structure.');
+    }
+
+    // Support both versioned backups and raw dumps
+    const exercises = Array.isArray(payload.exercises) ? payload.exercises : null;
+    const workoutLogs = Array.isArray(payload.workoutLogs) ? payload.workoutLogs : null;
+    const bodyWeightEntries = Array.isArray(payload.bodyWeightEntries) ? payload.bodyWeightEntries : null;
+    const userPrefs = payload.userPrefs && typeof payload.userPrefs === 'object' ? payload.userPrefs : null;
+
+    if (!exercises && !workoutLogs && !bodyWeightEntries) {
+      throw new Error('The selected file does not contain valid LiftLog data.');
+    }
+
+    if (exercises) {
+      await AsyncStorage.setItem(STORAGE_KEYS.EXERCISES, JSON.stringify(exercises));
+    }
+    if (workoutLogs) {
+      await AsyncStorage.setItem(STORAGE_KEYS.WORKOUT_LOGS, JSON.stringify(workoutLogs));
+    }
+    if (bodyWeightEntries) {
+      await AsyncStorage.setItem(STORAGE_KEYS.BODY_WEIGHT, JSON.stringify(bodyWeightEntries));
+    }
+    if (userPrefs) {
+      await AsyncStorage.setItem(STORAGE_KEYS.USER_PREFS, JSON.stringify(userPrefs));
+    }
     await AsyncStorage.setItem(STORAGE_KEYS.INITIALIZED, 'true');
   },
 };

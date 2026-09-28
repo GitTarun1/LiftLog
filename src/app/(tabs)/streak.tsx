@@ -1,7 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import {
   Alert,
-  Platform,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -11,7 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
 import { useFitness } from '@/context/FitnessContext';
@@ -31,16 +30,23 @@ export default function StreakScreen() {
       const json = await FitnessStorage.exportAllData();
       const dateStr = new Date().toISOString().split('T')[0];
       const fileName = `liftlog-backup-${dateStr}.json`;
-      const fileUri = FileSystem.cacheDirectory + fileName;
+      const baseDir = FileSystem.cacheDirectory || FileSystem.documentDirectory;
+      if (!baseDir) {
+        throw new Error('Device storage cache directory is not available.');
+      }
+      const fileUri = `${baseDir}${fileName}`;
       await FileSystem.writeAsStringAsync(fileUri, json, { encoding: FileSystem.EncodingType.UTF8 });
       const canShare = await Sharing.isAvailableAsync();
       if (canShare) {
-        await Sharing.shareAsync(fileUri, { mimeType: 'application/json', dialogTitle: 'Save LiftLog Backup' });
+        await Sharing.shareAsync(fileUri, {
+          mimeType: 'application/json',
+          dialogTitle: 'Save or Share LiftLog Backup',
+        });
       } else {
-        Alert.alert('Exported', `Backup saved to:\n${fileUri}`);
+        Alert.alert('Export Complete', `Backup saved locally:\n${fileUri}`);
       }
     } catch (e: any) {
-      Alert.alert('Export Failed', e?.message || 'Could not export backup.');
+      Alert.alert('Export Failed', e?.message || 'Could not export backup data.');
     } finally {
       setIsExporting(false);
     }
@@ -49,18 +55,20 @@ export default function StreakScreen() {
   const handleImportBackup = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
-        type: 'application/json',
+        type: ['application/json', 'text/plain', 'application/octet-stream', '*/*'],
         copyToCacheDirectory: true,
       });
-      if (result.canceled || !result.assets?.[0]) return;
+      if (result.canceled || !result.assets || result.assets.length === 0) return;
       const fileUri = result.assets[0].uri;
+      const fileName = result.assets[0].name || 'backup file';
+
       Alert.alert(
         'Restore Backup?',
-        'This will replace ALL current data with the backup. This cannot be undone.',
+        `Restore data from "${fileName}"?\n\nThis will update your workout history, body weight logs, and exercises.`,
         [
           { text: 'Cancel', style: 'cancel' },
           {
-            text: 'Restore',
+            text: 'Restore Now',
             style: 'destructive',
             onPress: async () => {
               setIsImporting(true);
@@ -68,9 +76,9 @@ export default function StreakScreen() {
                 const json = await FileSystem.readAsStringAsync(fileUri, { encoding: FileSystem.EncodingType.UTF8 });
                 await FitnessStorage.importAllData(json);
                 await refreshData();
-                Alert.alert('✅ Restored', 'Your backup has been restored successfully.');
+                Alert.alert('✅ Restore Complete', 'Your exercises, workout sessions, and weight logs have been successfully restored.');
               } catch (e: any) {
-                Alert.alert('Import Failed', e?.message || 'Invalid or corrupted backup file.');
+                Alert.alert('Import Failed', e?.message || 'Invalid or corrupted backup file format.');
               } finally {
                 setIsImporting(false);
               }
@@ -79,7 +87,7 @@ export default function StreakScreen() {
         ]
       );
     } catch (e: any) {
-      Alert.alert('Import Failed', e?.message || 'Could not read the file.');
+      Alert.alert('Import Failed', e?.message || 'Could not read the selected file.');
     }
   };
 
@@ -138,10 +146,21 @@ export default function StreakScreen() {
   const handleResetDemo = () => {
     Alert.alert(
       'Reset Demo Data',
-      'This will reload default exercises, sample workout logs, and body weight history. Continue?',
+      'This will reload default exercises, 10 weeks of sample workout history, and body weight logs. Continue?',
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Reset', style: 'destructive', onPress: () => resetToDemo() },
+        {
+          text: 'Reset Demo Data',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await resetToDemo();
+              Alert.alert('✅ Demo Data Restored', 'Sample workouts, exercises, and body weight history are now loaded.');
+            } catch (e: any) {
+              Alert.alert('Reset Failed', e?.message || 'Could not restore demo data.');
+            }
+          },
+        },
       ]
     );
   };

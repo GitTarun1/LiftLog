@@ -2,7 +2,6 @@ import React, { useMemo, useState } from 'react';
 import {
   Alert,
   FlatList,
-  Platform,
   StatusBar,
   StyleSheet,
   Text,
@@ -16,7 +15,7 @@ import { useFitness } from '@/context/FitnessContext';
 import { useTheme } from '@/hooks/use-theme';
 import { FitnessStorage } from '@/services/storage';
 import { IOSCard } from '@/components/ui/IOSCard';
-import { ChartDataPoint, IOSChart } from '@/components/ui/IOSChart';
+import { ChartDataPoint, IOSChart, TimeRange } from '@/components/ui/IOSChart';
 import { IOSSegmentedControl } from '@/components/ui/IOSSegmentedControl';
 import { LogWorkoutModal } from '@/components/LogWorkoutModal';
 import { WorkoutLog } from '@/types/fitness';
@@ -36,7 +35,7 @@ export default function ExerciseDetailScreen() {
   } = useFitness();
 
   const [activeTab, setActiveTab] = useState<'history' | 'progress'>('history');
-  const [timeframe, setTimeframe] = useState<'weeks' | 'months'>('weeks');
+  const [timeframe, setTimeframe] = useState<TimeRange>('3M');
   const [isLogModalVisible, setIsLogModalVisible] = useState(false);
 
   // Find the exercise
@@ -61,10 +60,25 @@ export default function ExerciseDetailScreen() {
     // Ascending order for chart
     const ascLogs = [...exerciseLogs].sort((a, b) => a.timestamp - b.timestamp);
 
-    if (timeframe === 'weeks') {
+    const latestTimestamp = ascLogs[ascLogs.length - 1].timestamp;
+    const dayMs = 86400000;
+    let cutoff = 0;
+    if (timeframe === '10D') cutoff = latestTimestamp - 10 * dayMs;
+    else if (timeframe === '1M') cutoff = latestTimestamp - 30 * dayMs;
+    else if (timeframe === '3M') cutoff = latestTimestamp - 90 * dayMs;
+    else if (timeframe === '6M') cutoff = latestTimestamp - 180 * dayMs;
+    else if (timeframe === '1Y') cutoff = latestTimestamp - 365 * dayMs;
+    else cutoff = 0; // ALL
+
+    let filtered = ascLogs.filter((l) => l.timestamp >= cutoff);
+    if (filtered.length === 0) {
+      const fallbackCount = timeframe === '10D' ? 5 : timeframe === '1M' ? 8 : ascLogs.length;
+      filtered = ascLogs.slice(-fallbackCount);
+    }
+
+    if (timeframe === '10D' || timeframe === '1M' || timeframe === '3M' || filtered.length <= 12) {
       // Pick top set weight for each workout session
-      const recent = ascLogs.slice(-10);
-      return recent.map((log) => {
+      return filtered.map((log) => {
         const topWeight = Math.max(...log.sets.map((s) => s.weight), 0);
         const d = new Date(log.timestamp);
         const monthShort = d.toLocaleString('en-US', { month: 'short' });
@@ -79,7 +93,7 @@ export default function ExerciseDetailScreen() {
     } else {
       // Monthly max weight
       const monthMap = new Map<string, { maxWeight: number; dateStr: string }>();
-      ascLogs.forEach((log) => {
+      filtered.forEach((log) => {
         const d = new Date(log.timestamp);
         const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
         const topWeight = Math.max(...log.sets.map((s) => s.weight), 0);
@@ -101,7 +115,7 @@ export default function ExerciseDetailScreen() {
           dateStr: val.dateStr,
         });
       });
-      return result.slice(-8);
+      return result;
     }
   }, [exerciseLogs, timeframe]);
 
@@ -176,7 +190,7 @@ export default function ExerciseDetailScreen() {
   const catStyle = CATEGORY_STYLES[exercise.category] || CATEGORY_STYLES.other;
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+    <SafeAreaView edges={['top', 'left', 'right']} style={[styles.container, { backgroundColor: theme.background }]}>
       <StatusBar barStyle={theme.text === '#FFFFFF' ? 'light-content' : 'dark-content'} />
 
       {/* Navigation Header */}
@@ -458,7 +472,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'android' ? 36 : 6,
+    paddingTop: 6,
     paddingBottom: 8,
   },
   navBackBtn: {

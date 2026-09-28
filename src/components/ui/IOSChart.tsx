@@ -16,7 +16,8 @@ import Svg, {
   Text as SvgText,
 } from 'react-native-svg';
 import { useTheme } from '@/hooks/use-theme';
-import { IOSSegmentedControl } from './IOSSegmentedControl';
+
+export type TimeRange = '10D' | '1M' | '3M' | '6M' | '1Y' | 'ALL';
 
 export interface ChartDataPoint {
   label: string; // e.g. 'W1', 'W2', or 'Sep', 'Oct'
@@ -25,13 +26,23 @@ export interface ChartDataPoint {
   subtext?: string;
 }
 
+const DEFAULT_TIMEFRAMES: { label: string; value: TimeRange }[] = [
+  { label: '10D', value: '10D' },
+  { label: '1M', value: '1M' },
+  { label: '3M', value: '3M' },
+  { label: '6M', value: '6M' },
+  { label: '1Y', value: '1Y' },
+  { label: 'ALL', value: 'ALL' },
+];
+
 interface IOSChartProps {
   data: ChartDataPoint[];
   unit: string;
-  timeframe: 'weeks' | 'months';
-  onTimeframeChange: (tf: 'weeks' | 'months') => void;
+  timeframe: TimeRange;
+  onTimeframeChange: (tf: TimeRange) => void;
   accentColor?: string;
   emptyMessage?: string;
+  timeframeOptions?: { label: string; value: TimeRange }[];
 }
 
 export function IOSChart({
@@ -41,6 +52,7 @@ export function IOSChart({
   onTimeframeChange,
   accentColor,
   emptyMessage = 'No workout data logged yet.',
+  timeframeOptions = DEFAULT_TIMEFRAMES,
 }: IOSChartProps) {
   const theme = useTheme();
   const color = accentColor || theme.tint;
@@ -54,18 +66,43 @@ export function IOSChart({
   const paddingTop = 20;
   const paddingBottom = 28;
 
+  const renderTimeframeSelector = () => (
+    <View style={[styles.pillContainer, { backgroundColor: theme.inputBackground }]}>
+      {timeframeOptions.map((opt) => {
+        const isSelected = timeframe === opt.value;
+        return (
+          <TouchableOpacity
+            key={opt.value}
+            onPress={() => {
+              setSelectedIndex(null);
+              onTimeframeChange(opt.value);
+            }}
+            style={[
+              styles.pillBtn,
+              isSelected && [styles.pillBtnActive, { backgroundColor: theme.card }],
+            ]}
+            activeOpacity={0.7}
+          >
+            <Text
+              style={[
+                styles.pillText,
+                { color: isSelected ? theme.text : theme.textSecondary },
+                isSelected && { fontWeight: '700' },
+              ]}
+            >
+              {opt.label}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+
   if (!data || data.length === 0) {
     return (
       <View style={[styles.emptyContainer, { borderColor: theme.border }]}>
         <View style={styles.segmentWrapper}>
-          <IOSSegmentedControl
-            options={[
-              { label: 'Weeks', value: 'weeks' },
-              { label: 'Months', value: 'months' },
-            ]}
-            selectedValue={timeframe}
-            onValueChange={onTimeframeChange}
-          />
+          {renderTimeframeSelector()}
         </View>
         <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
           {emptyMessage}
@@ -172,18 +209,11 @@ export function IOSChart({
             )}
           </View>
         </View>
+      </View>
 
-        {/* Timeframe Segmented Control */}
-        <View style={styles.segmentControlWrapper}>
-          <IOSSegmentedControl
-            options={[
-              { label: 'Weeks', value: 'weeks' },
-              { label: 'Months', value: 'months' },
-            ]}
-            selectedValue={timeframe}
-            onValueChange={onTimeframeChange}
-          />
-        </View>
+      {/* Timeframe Pill Selector */}
+      <View style={styles.timeframeRow}>
+        {renderTimeframeSelector()}
       </View>
 
       {/* SVG Chart */}
@@ -320,7 +350,36 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 8,
+  },
+  timeframeRow: {
+    marginBottom: 14,
+  },
+  pillContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 3,
+    borderRadius: 10,
+    width: '100%',
+  },
+  pillBtn: {
+    flex: 1,
+    paddingVertical: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 7,
+  },
+  pillBtnActive: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.12,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  pillText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
   subLabel: {
     fontSize: 12,
@@ -401,7 +460,7 @@ const styles = StyleSheet.create({
     minHeight: 180,
   },
   segmentWrapper: {
-    width: 160,
+    width: '100%',
     marginBottom: 20,
   },
   emptyText: {

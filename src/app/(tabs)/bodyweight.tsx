@@ -2,7 +2,6 @@ import React, { useMemo, useState } from 'react';
 import {
   Alert,
   FlatList,
-  Platform,
   StatusBar,
   StyleSheet,
   Text,
@@ -14,14 +13,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFitness } from '@/context/FitnessContext';
 import { useTheme } from '@/hooks/use-theme';
 import { IOSCard } from '@/components/ui/IOSCard';
-import { ChartDataPoint, IOSChart } from '@/components/ui/IOSChart';
+import { ChartDataPoint, IOSChart, TimeRange } from '@/components/ui/IOSChart';
 import { LogBodyWeightModal } from '@/components/LogBodyWeightModal';
 import { BodyWeightEntry } from '@/types/fitness';
 
 export default function BodyWeightScreen() {
   const theme = useTheme();
   const { bodyWeightEntries, userPrefs, addBodyWeight, deleteBodyWeight } = useFitness();
-  const [timeframe, setTimeframe] = useState<'weeks' | 'months'>('weeks');
+  const [timeframe, setTimeframe] = useState<TimeRange>('1M');
   const [isModalVisible, setIsModalVisible] = useState(false);
 
   // Sort entries chronologically (oldest to newest for charting)
@@ -29,14 +28,30 @@ export default function BodyWeightScreen() {
     return [...bodyWeightEntries].sort((a, b) => a.timestamp - b.timestamp);
   }, [bodyWeightEntries]);
 
-  // Aggregate points based on timeframe: 'weeks' vs 'months'
+  // Aggregate points based on timeframe: 10D, 1M, 3M, 6M, 1Y, ALL
   const chartData: ChartDataPoint[] = useMemo(() => {
     if (sortedAsc.length === 0) return [];
 
-    if (timeframe === 'weeks') {
-      // Group by week or show the last 10 entries spaced out
-      const recent = sortedAsc.slice(-12);
-      return recent.map((item, idx) => {
+    const latestTimestamp = sortedAsc[sortedAsc.length - 1].timestamp;
+    const dayMs = 86400000;
+    let cutoff = 0;
+    if (timeframe === '10D') cutoff = latestTimestamp - 10 * dayMs;
+    else if (timeframe === '1M') cutoff = latestTimestamp - 30 * dayMs;
+    else if (timeframe === '3M') cutoff = latestTimestamp - 90 * dayMs;
+    else if (timeframe === '6M') cutoff = latestTimestamp - 180 * dayMs;
+    else if (timeframe === '1Y') cutoff = latestTimestamp - 365 * dayMs;
+    else cutoff = 0; // ALL
+
+    let filtered = sortedAsc.filter((e) => e.timestamp >= cutoff);
+    // If user filtered but entries are older, fallback to recent N items so chart is always informative
+    if (filtered.length === 0) {
+      const fallbackCount = timeframe === '10D' ? 5 : timeframe === '1M' ? 10 : sortedAsc.length;
+      filtered = sortedAsc.slice(-fallbackCount);
+    }
+
+    if (timeframe === '10D' || timeframe === '1M' || (timeframe === '3M' && filtered.length <= 15) || filtered.length <= 10) {
+      // Show individual weigh-in data points
+      return filtered.map((item) => {
         const d = new Date(item.timestamp);
         const day = d.getDate();
         const monthShort = d.toLocaleString('en-US', { month: 'short' });
@@ -50,12 +65,13 @@ export default function BodyWeightScreen() {
     } else {
       // Group by Month (average weight per month)
       const monthMap = new Map<string, { sum: number; count: number; dateStr: string }>();
-      sortedAsc.forEach((entry) => {
+      filtered.forEach((entry) => {
         const d = new Date(entry.timestamp);
         const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
         const existing = monthMap.get(key) || { sum: 0, count: 0, dateStr: entry.date };
         existing.sum += entry.weight;
         existing.count += 1;
+        existing.dateStr = entry.date;
         monthMap.set(key, existing);
       });
 
@@ -70,7 +86,7 @@ export default function BodyWeightScreen() {
           dateStr: val.dateStr,
         });
       });
-      return result.slice(-8);
+      return result;
     }
   }, [sortedAsc, timeframe]);
 
