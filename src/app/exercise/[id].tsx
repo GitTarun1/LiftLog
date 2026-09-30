@@ -53,6 +53,17 @@ export default function ExerciseDetailScreen() {
     return FitnessStorage.calculateExerciseStats(id || '', workoutLogs);
   }, [id, workoutLogs]);
 
+  const exType = exercise?.exerciseType || 'weight_reps';
+
+  const formatDuration = (seconds?: number) => {
+    if (!seconds || seconds <= 0) return '0s';
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    if (m > 0 && s > 0) return `${m}m ${s}s`;
+    if (m > 0) return `${m}m`;
+    return `${s}s`;
+  };
+
   // Build progression graph data
   const chartData: ChartDataPoint[] = useMemo(() => {
     if (exerciseLogs.length === 0) return [];
@@ -77,29 +88,45 @@ export default function ExerciseDetailScreen() {
     }
 
     if (timeframe === '10D' || timeframe === '1M' || timeframe === '3M' || filtered.length <= 12) {
-      // Pick top set weight for each workout session
+      // Pick top performance for each workout session
       return filtered.map((log) => {
-        const topWeight = Math.max(...log.sets.map((s) => s.weight), 0);
+        let topVal = 0;
+        if (exType === 'duration') {
+          topVal = Math.max(...log.sets.map((s) => s.durationSeconds ?? 0), 0);
+        } else if (exType === 'reps_only') {
+          topVal = Math.max(...log.sets.map((s) => s.reps ?? 0), 0);
+        } else {
+          topVal = Math.max(...log.sets.map((s) => s.weight ?? 0), 0);
+        }
+
         const d = new Date(log.timestamp);
         const monthShort = d.toLocaleString('en-US', { month: 'short' });
         const day = d.getDate();
         return {
           label: `${monthShort} ${day}`,
-          value: topWeight,
+          value: topVal,
           dateStr: log.date,
           subtext: `${log.sets.length} sets`,
         };
       });
     } else {
-      // Monthly max weight
-      const monthMap = new Map<string, { maxWeight: number; dateStr: string }>();
+      // Monthly max value
+      const monthMap = new Map<string, { maxVal: number; dateStr: string }>();
       filtered.forEach((log) => {
         const d = new Date(log.timestamp);
         const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-        const topWeight = Math.max(...log.sets.map((s) => s.weight), 0);
-        const existing = monthMap.get(key) || { maxWeight: 0, dateStr: log.date };
-        if (topWeight > existing.maxWeight) {
-          existing.maxWeight = topWeight;
+        let topVal = 0;
+        if (exType === 'duration') {
+          topVal = Math.max(...log.sets.map((s) => s.durationSeconds ?? 0), 0);
+        } else if (exType === 'reps_only') {
+          topVal = Math.max(...log.sets.map((s) => s.reps ?? 0), 0);
+        } else {
+          topVal = Math.max(...log.sets.map((s) => s.weight ?? 0), 0);
+        }
+
+        const existing = monthMap.get(key) || { maxVal: 0, dateStr: log.date };
+        if (topVal > existing.maxVal) {
+          existing.maxVal = topVal;
         }
         monthMap.set(key, existing);
       });
@@ -111,13 +138,13 @@ export default function ExerciseDetailScreen() {
         const monthName = dateObj.toLocaleString('en-US', { month: 'short' });
         result.push({
           label: monthName,
-          value: val.maxWeight,
+          value: val.maxVal,
           dateStr: val.dateStr,
         });
       });
       return result;
     }
-  }, [exerciseLogs, timeframe]);
+  }, [exerciseLogs, timeframe, exType]);
 
   if (!exercise) {
     return (
@@ -172,6 +199,7 @@ export default function ExerciseDetailScreen() {
       ? {
           weight: exerciseLogs[0].sets[0].weight,
           reps: exerciseLogs[0].sets[0].reps,
+          durationSeconds: exerciseLogs[0].sets[0].durationSeconds,
         }
       : undefined;
 
@@ -188,6 +216,10 @@ export default function ExerciseDetailScreen() {
   };
 
   const catStyle = CATEGORY_STYLES[exercise.category] || CATEGORY_STYLES.other;
+
+  // Chart Title & Unit
+  const chartUnit = exType === 'duration' ? 'sec' : exType === 'reps_only' ? 'reps' : userPrefs.weightUnit;
+  const chartTitle = exType === 'duration' ? 'Duration Progression' : exType === 'reps_only' ? 'Reps Progression' : 'Weight Progression';
 
   return (
     <SafeAreaView edges={['top', 'left', 'right']} style={[styles.container, { backgroundColor: theme.background }]}>
@@ -222,11 +254,19 @@ export default function ExerciseDetailScreen() {
           <>
             {/* Title & Tag Section */}
             <View style={styles.titleSection}>
-              <View style={[styles.categoryBadge, { backgroundColor: catStyle.bg }]}>
-                <Text style={[styles.categoryBadgeText, { color: catStyle.text }]}>
-                  {exercise.category.replace('_', ' ').toUpperCase()}
-                </Text>
+              <View style={{ flexDirection: 'row', gap: 6, marginBottom: 6 }}>
+                <View style={[styles.categoryBadge, { backgroundColor: catStyle.bg }]}>
+                  <Text style={[styles.categoryBadgeText, { color: catStyle.text }]}>
+                    {exercise.category.replace('_', ' ').toUpperCase()}
+                  </Text>
+                </View>
+                <View style={[styles.categoryBadge, { backgroundColor: theme.inputBackground }]}>
+                  <Text style={[styles.categoryBadgeText, { color: theme.textSecondary }]}>
+                    {exType === 'duration' ? '⏱️ TIMED' : exType === 'reps_only' ? '🔢 REPS ONLY' : '⚖️ WEIGHT & REPS'}
+                  </Text>
+                </View>
               </View>
+
               <Text style={[styles.exerciseName, { color: theme.text }]}>
                 {exercise.name}
               </Text>
@@ -239,25 +279,77 @@ export default function ExerciseDetailScreen() {
 
             {/* Quick PR Highlights Row */}
             <View style={styles.statsGrid}>
-              <IOSCard style={styles.statCard}>
-                <Text style={[styles.statLabel, { color: theme.textSecondary }]}>
-                  MAX WEIGHT
-                </Text>
-                <Text style={[styles.statValue, { color: theme.text }]}>
-                  {stats.maxWeight > 0 ? `${stats.maxWeight} ${userPrefs.weightUnit}` : '--'}
-                </Text>
-                <Text style={[styles.statSub, { color: theme.tint }]}>Personal Record</Text>
-              </IOSCard>
+              {exType === 'weight_reps' && (
+                <>
+                  <IOSCard style={styles.statCard}>
+                    <Text style={[styles.statLabel, { color: theme.textSecondary }]}>
+                      MAX WEIGHT
+                    </Text>
+                    <Text style={[styles.statValue, { color: theme.text }]}>
+                      {stats.maxWeight > 0 ? `${stats.maxWeight} ${userPrefs.weightUnit}` : '--'}
+                    </Text>
+                    <Text style={[styles.statSub, { color: theme.tint }]}>Personal Record</Text>
+                  </IOSCard>
 
-              <IOSCard style={styles.statCard}>
-                <Text style={[styles.statLabel, { color: theme.textSecondary }]}>
-                  EST. 1RM
-                </Text>
-                <Text style={[styles.statValue, { color: theme.text }]}>
-                  {stats.estimated1RM > 0 ? `${stats.estimated1RM} ${userPrefs.weightUnit}` : '--'}
-                </Text>
-                <Text style={[styles.statSub, { color: theme.textSecondary }]}>One Rep Max</Text>
-              </IOSCard>
+                  <IOSCard style={styles.statCard}>
+                    <Text style={[styles.statLabel, { color: theme.textSecondary }]}>
+                      EST. 1RM
+                    </Text>
+                    <Text style={[styles.statValue, { color: theme.text }]}>
+                      {stats.estimated1RM > 0 ? `${stats.estimated1RM} ${userPrefs.weightUnit}` : '--'}
+                    </Text>
+                    <Text style={[styles.statSub, { color: theme.textSecondary }]}>One Rep Max</Text>
+                  </IOSCard>
+                </>
+              )}
+
+              {exType === 'reps_only' && (
+                <>
+                  <IOSCard style={styles.statCard}>
+                    <Text style={[styles.statLabel, { color: theme.textSecondary }]}>
+                      MAX REPS
+                    </Text>
+                    <Text style={[styles.statValue, { color: theme.text }]}>
+                      {(stats.maxReps ?? 0) > 0 ? `${stats.maxReps} reps` : '--'}
+                    </Text>
+                    <Text style={[styles.statSub, { color: theme.tint }]}>Peak Set</Text>
+                  </IOSCard>
+
+                  <IOSCard style={styles.statCard}>
+                    <Text style={[styles.statLabel, { color: theme.textSecondary }]}>
+                      TOTAL REPS
+                    </Text>
+                    <Text style={[styles.statValue, { color: theme.text }]}>
+                      {stats.totalReps ?? 0}
+                    </Text>
+                    <Text style={[styles.statSub, { color: theme.textSecondary }]}>All Sessions</Text>
+                  </IOSCard>
+                </>
+              )}
+
+              {exType === 'duration' && (
+                <>
+                  <IOSCard style={styles.statCard}>
+                    <Text style={[styles.statLabel, { color: theme.textSecondary }]}>
+                      BEST TIME
+                    </Text>
+                    <Text style={[styles.statValue, { color: theme.text }]}>
+                      {(stats.maxDurationSeconds ?? 0) > 0 ? formatDuration(stats.maxDurationSeconds) : '--'}
+                    </Text>
+                    <Text style={[styles.statSub, { color: theme.tint }]}>Longest Hold</Text>
+                  </IOSCard>
+
+                  <IOSCard style={styles.statCard}>
+                    <Text style={[styles.statLabel, { color: theme.textSecondary }]}>
+                      TOTAL HOLD
+                    </Text>
+                    <Text style={[styles.statValue, { color: theme.text }]}>
+                      {(stats.totalDurationSeconds ?? 0) > 0 ? formatDuration(stats.totalDurationSeconds) : '--'}
+                    </Text>
+                    <Text style={[styles.statSub, { color: theme.textSecondary }]}>Total Time</Text>
+                  </IOSCard>
+                </>
+              )}
 
               <IOSCard style={styles.statCard}>
                 <Text style={[styles.statLabel, { color: theme.textSecondary }]}>
@@ -296,11 +388,11 @@ export default function ExerciseDetailScreen() {
             {activeTab === 'progress' && (
               <IOSCard style={styles.chartCard}>
                 <Text style={[styles.chartSectionTitle, { color: theme.text }]}>
-                  Weight Progression
+                  {chartTitle}
                 </Text>
                 <IOSChart
                   data={chartData}
-                  unit={userPrefs.weightUnit}
+                  unit={chartUnit}
                   timeframe={timeframe}
                   onTimeframeChange={setTimeframe}
                   accentColor={theme.tint}
@@ -325,7 +417,17 @@ export default function ExerciseDetailScreen() {
         renderItem={({ item }) => {
           if (activeTab !== 'history') return null;
 
-          const sessionVolume = item.sets.reduce((acc, s) => acc + s.weight * s.reps, 0);
+          let sessionSummaryText = '';
+          if (exType === 'duration') {
+            const totalSecs = item.sets.reduce((acc, s) => acc + (s.durationSeconds ?? 0), 0);
+            sessionSummaryText = `Total Hold: ${formatDuration(totalSecs)}`;
+          } else if (exType === 'reps_only') {
+            const totalReps = item.sets.reduce((acc, s) => acc + (s.reps ?? 0), 0);
+            sessionSummaryText = `Total: ${totalReps} reps`;
+          } else {
+            const sessionVolume = item.sets.reduce((acc, s) => acc + (s.weight ?? 0) * (s.reps ?? 0), 0);
+            sessionSummaryText = `Volume: ${sessionVolume.toLocaleString()} ${userPrefs.weightUnit}`;
+          }
 
           return (
             <IOSCard style={styles.workoutSessionCard}>
@@ -335,7 +437,7 @@ export default function ExerciseDetailScreen() {
                     {item.date}
                   </Text>
                   <Text style={[styles.sessionVolume, { color: theme.textSecondary }]}>
-                    Volume: {sessionVolume.toLocaleString()} {userPrefs.weightUnit}
+                    {sessionSummaryText}
                   </Text>
                 </View>
 
@@ -351,10 +453,25 @@ export default function ExerciseDetailScreen() {
               <View style={styles.setsTable}>
                 <View style={[styles.tableRow, styles.tableHeader]}>
                   <Text style={[styles.colIndex, { color: theme.textSecondary }]}>SET</Text>
-                  <Text style={[styles.colWeight, { color: theme.textSecondary }]}>
-                    WEIGHT ({userPrefs.weightUnit})
-                  </Text>
-                  <Text style={[styles.colReps, { color: theme.textSecondary }]}>REPS</Text>
+
+                  {exType === 'weight_reps' && (
+                    <Text style={[styles.colWeight, { color: theme.textSecondary }]}>
+                      WEIGHT ({userPrefs.weightUnit})
+                    </Text>
+                  )}
+
+                  {exType !== 'duration' && (
+                    <Text style={[styles.colReps, { color: theme.textSecondary }]}>
+                      REPS
+                    </Text>
+                  )}
+
+                  {exType === 'duration' && (
+                    <Text style={[styles.colDuration, { color: theme.textSecondary }]}>
+                      DURATION
+                    </Text>
+                  )}
+
                   <Text style={[styles.colNote, { color: theme.textSecondary }]}>TYPE</Text>
                 </View>
 
@@ -391,12 +508,24 @@ export default function ExerciseDetailScreen() {
                       </View>
                     </View>
 
-                    <Text style={[styles.colWeight, styles.tableCellText, { color: theme.text }]}>
-                      {set.weight}
-                    </Text>
-                    <Text style={[styles.colReps, styles.tableCellText, { color: theme.text }]}>
-                      {set.reps}
-                    </Text>
+                    {exType === 'weight_reps' && (
+                      <Text style={[styles.colWeight, styles.tableCellText, { color: theme.text }]}>
+                        {set.weight ?? 0}
+                      </Text>
+                    )}
+
+                    {exType !== 'duration' && (
+                      <Text style={[styles.colReps, styles.tableCellText, { color: theme.text }]}>
+                        {set.reps ?? 0}
+                      </Text>
+                    )}
+
+                    {exType === 'duration' && (
+                      <Text style={[styles.colDuration, styles.tableCellText, { color: theme.text }]}>
+                        {formatDuration(set.durationSeconds)}
+                      </Text>
+                    )}
+
                     <View style={styles.colNote}>
                       {set.isWarmup ? (
                         <Text style={styles.warmupBadgeText}>Warmup</Text>
@@ -636,6 +765,11 @@ const styles = StyleSheet.create({
   },
   colReps: {
     flex: 1,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  colDuration: {
+    flex: 1.5,
     fontSize: 12,
     fontWeight: '600',
   },

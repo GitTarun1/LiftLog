@@ -9,11 +9,14 @@ export type MuscleGroup =
   | 'cardio'
   | 'other';
 
+export type ExerciseType = 'weight_reps' | 'reps_only' | 'duration';
+
 export interface WorkoutSet {
   id: string;
   setNumber: number;
-  weight: number; // in user preferred unit (kg/lbs)
-  reps: number;
+  weight?: number; // in user preferred unit (kg/lbs) - for weight_reps
+  reps?: number; // reps count - for weight_reps or reps_only
+  durationSeconds?: number; // duration in seconds - for duration/timer exercises
   rpe?: number;
   isWarmup?: boolean;
 }
@@ -31,6 +34,7 @@ export interface Exercise {
   id: string;
   name: string;
   category: MuscleGroup;
+  exerciseType?: ExerciseType; // 'weight_reps' | 'reps_only' | 'duration' (defaults to 'weight_reps')
   notes?: string;
   createdAt: number;
   isCustom?: boolean;
@@ -55,9 +59,14 @@ export interface ExerciseStats {
   maxWeight: number;
   maxVolume: number;
   estimated1RM: number;
+  maxReps?: number;
+  totalReps?: number;
+  maxDurationSeconds?: number;
+  totalDurationSeconds?: number;
   lastLoggedDate?: string;
   lastWeight?: number;
   lastReps?: number;
+  lastDurationSeconds?: number;
   lastSetsCount?: number;
 }
 

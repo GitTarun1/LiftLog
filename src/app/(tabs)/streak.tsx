@@ -388,24 +388,33 @@ export default function StreakScreen() {
                   </View>
 
                   <View style={styles.setsSummaryRow}>
-                    {log.sets.map((s, idx) => (
-                      <View
-                        key={s.id}
-                        style={[
-                          styles.setChip,
-                          { backgroundColor: theme.inputBackground },
-                          s.isWarmup && { opacity: 0.7 },
-                        ]}
-                      >
-                        <Text style={[styles.setChipText, { color: theme.text }]}>
-                          {s.weight}
-                          <Text style={{ fontSize: 10, color: theme.textSecondary }}>
-                            {userPrefs.weightUnit}
+                    {log.sets.map((s) => {
+                      let chipLabel = '';
+                      if (s.durationSeconds) {
+                        const m = Math.floor(s.durationSeconds / 60);
+                        const sec = s.durationSeconds % 60;
+                        chipLabel = m > 0 ? `${m}m ${sec ? sec + 's' : ''}` : `${sec}s`;
+                      } else if (s.weight !== undefined && s.weight > 0) {
+                        chipLabel = `${s.weight}${userPrefs.weightUnit} × ${s.reps}`;
+                      } else {
+                        chipLabel = `${s.reps ?? 0} reps`;
+                      }
+
+                      return (
+                        <View
+                          key={s.id}
+                          style={[
+                            styles.setChip,
+                            { backgroundColor: theme.inputBackground },
+                            s.isWarmup && { opacity: 0.7 },
+                          ]}
+                        >
+                          <Text style={[styles.setChipText, { color: theme.text }]}>
+                            {chipLabel}
                           </Text>
-                          {' × '}{s.reps}
-                        </Text>
-                      </View>
-                    ))}
+                        </View>
+                      );
+                    })}
                   </View>
                 </IOSCard>
               );

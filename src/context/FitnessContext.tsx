@@ -17,7 +17,12 @@ interface FitnessContextValue {
   userPrefs: UserPreferences;
   streakStats: StreakStats;
   isLoading: boolean;
-  addExercise: (name: string, category: MuscleGroup, notes?: string) => Promise<Exercise>;
+  addExercise: (
+    name: string,
+    category: MuscleGroup,
+    exerciseType?: Exercise['exerciseType'],
+    notes?: string
+  ) => Promise<Exercise>;
   deleteExercise: (id: string) => Promise<void>;
   addWorkoutLog: (log: {
     exerciseId: string;
@@ -79,8 +84,13 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
     loadAll();
   }, [loadAll]);
 
-  const addExercise = async (name: string, category: MuscleGroup, notes?: string) => {
-    const created = await FitnessStorage.addExercise(name, category, notes);
+  const addExercise = async (
+    name: string,
+    category: MuscleGroup,
+    exerciseType?: Exercise['exerciseType'],
+    notes?: string
+  ) => {
+    const created = await FitnessStorage.addExercise(name, category, exerciseType, notes);
     setExercises((prev) => [created, ...prev]);
     return created;
   };

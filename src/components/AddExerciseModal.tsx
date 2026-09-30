@@ -13,12 +13,17 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/hooks/use-theme';
-import { MuscleGroup } from '../types/fitness';
+import { ExerciseType, MuscleGroup } from '../types/fitness';
 
 interface AddExerciseModalProps {
   visible: boolean;
   onClose: () => void;
-  onAdd: (name: string, category: MuscleGroup, notes?: string) => Promise<any> | void;
+  onAdd: (
+    name: string,
+    category: MuscleGroup,
+    exerciseType: ExerciseType,
+    notes?: string
+  ) => Promise<any> | void;
 }
 
 const CATEGORIES: { label: string; value: MuscleGroup; icon: keyof typeof Ionicons.glyphMap }[] = [
@@ -33,11 +38,42 @@ const CATEGORIES: { label: string; value: MuscleGroup; icon: keyof typeof Ionico
   { label: 'Other', value: 'other', icon: 'ellipsis-horizontal-outline' },
 ];
 
+const EXERCISE_TYPES: {
+  label: string;
+  value: ExerciseType;
+  icon: keyof typeof Ionicons.glyphMap;
+  badge: string;
+  description: string;
+}[] = [
+  {
+    label: 'Weight & Reps',
+    value: 'weight_reps',
+    icon: 'barbell',
+    badge: 'Standard',
+    description: 'Track weight (kg/lbs) and repetitions per set. (e.g. Bench Press, Squat, Dumbbells)',
+  },
+  {
+    label: 'Reps Only',
+    value: 'reps_only',
+    icon: 'repeat',
+    badge: 'Bodyweight',
+    description: 'Track repetitions completed without extra weight. (e.g. Pull-ups, Push-ups, Dips)',
+  },
+  {
+    label: 'Timer / Duration',
+    value: 'duration',
+    icon: 'stopwatch-outline',
+    badge: 'Timed',
+    description: 'Track time duration with built-in stopwatch. (e.g. Plank, Wall Sit, Dead Hang)',
+  },
+];
+
 export function AddExerciseModal({ visible, onClose, onAdd }: AddExerciseModalProps) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const [name, setName] = useState('');
   const [category, setCategory] = useState<MuscleGroup>('chest');
+  const [exerciseType, setExerciseType] = useState<ExerciseType>('weight_reps');
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -50,9 +86,10 @@ export function AddExerciseModal({ visible, onClose, onAdd }: AddExerciseModalPr
     setError('');
     setIsSubmitting(true);
     try {
-      await onAdd(name.trim(), category, notes.trim() || undefined);
+      await onAdd(name.trim(), category, exerciseType, notes.trim() || undefined);
       setName('');
       setCategory('chest');
+      setExerciseType('weight_reps');
       setNotes('');
       onClose();
     } catch (e) {
@@ -67,6 +104,7 @@ export function AddExerciseModal({ visible, onClose, onAdd }: AddExerciseModalPr
     setName('');
     setError('');
     setNotes('');
+    setExerciseType('weight_reps');
     onClose();
   };
 
@@ -145,7 +183,7 @@ export function AddExerciseModal({ visible, onClose, onAdd }: AddExerciseModalPr
             <View style={[styles.inputWrapper, { backgroundColor: theme.inputBackground }]}>
               <TextInput
                 style={[styles.input, { color: theme.text }]}
-                placeholder="e.g. Incline Bench Press"
+                placeholder="e.g. Incline Bench Press, Pull-Up, Plank"
                 placeholderTextColor={theme.textTertiary}
                 value={name}
                 onChangeText={(text) => {
@@ -163,7 +201,7 @@ export function AddExerciseModal({ visible, onClose, onAdd }: AddExerciseModalPr
             </View>
 
             {/* Muscle Group Selector */}
-            <Text style={[styles.inputLabel, { color: theme.textSecondary, marginTop: 20 }]}>
+            <Text style={[styles.inputLabel, { color: theme.textSecondary, marginTop: 18 }]}>
               TARGET MUSCLE GROUP
             </Text>
             <View style={styles.categoryGrid}>
@@ -184,9 +222,9 @@ export function AddExerciseModal({ visible, onClose, onAdd }: AddExerciseModalPr
                   >
                     <Ionicons
                       name={cat.icon}
-                      size={15}
+                      size={14}
                       color={isSelected ? '#FFFFFF' : theme.textSecondary}
-                      style={{ marginRight: 6 }}
+                      style={{ marginRight: 5 }}
                     />
                     <Text
                       style={[
@@ -198,6 +236,76 @@ export function AddExerciseModal({ visible, onClose, onAdd }: AddExerciseModalPr
                       ]}
                     >
                       {cat.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {/* Tracking Model Selector (3 Options) */}
+            <Text style={[styles.inputLabel, { color: theme.textSecondary, marginTop: 20 }]}>
+              HOW DO YOU TRACK THIS EXERCISE?
+            </Text>
+            <View style={styles.typeCardsContainer}>
+              {EXERCISE_TYPES.map((t) => {
+                const isSelected = exerciseType === t.value;
+                return (
+                  <TouchableOpacity
+                    key={t.value}
+                    activeOpacity={0.7}
+                    onPress={() => setExerciseType(t.value)}
+                    style={[
+                      styles.typeCard,
+                      {
+                        backgroundColor: isSelected ? 'rgba(10, 132, 255, 0.08)' : theme.inputBackground,
+                        borderColor: isSelected ? theme.tint : theme.border,
+                        borderWidth: isSelected ? 1.5 : 1,
+                      },
+                    ]}
+                  >
+                    <View style={styles.typeCardHeader}>
+                      <View style={styles.typeCardTitleRow}>
+                        <View
+                          style={[
+                            styles.typeIconBox,
+                            {
+                              backgroundColor: isSelected ? theme.tint : theme.card,
+                            },
+                          ]}
+                        >
+                          <Ionicons
+                            name={t.icon}
+                            size={16}
+                            color={isSelected ? '#FFFFFF' : theme.textSecondary}
+                          />
+                        </View>
+                        <Text
+                          style={[
+                            styles.typeCardTitle,
+                            { color: theme.text },
+                            isSelected && { fontWeight: '700' },
+                          ]}
+                        >
+                          {t.label}
+                        </Text>
+                      </View>
+
+                      <View
+                        style={[
+                          styles.radioCircle,
+                          { borderColor: isSelected ? theme.tint : theme.border },
+                        ]}
+                      >
+                        {isSelected && (
+                          <View
+                            style={[styles.radioDot, { backgroundColor: theme.tint }]}
+                          />
+                        )}
+                      </View>
+                    </View>
+
+                    <Text style={[styles.typeCardDescription, { color: theme.textSecondary }]}>
+                      {t.description}
                     </Text>
                   </TouchableOpacity>
                 );
@@ -349,5 +457,52 @@ const styles = StyleSheet.create({
   },
   textArea: {
     minHeight: 64,
+  },
+  typeCardsContainer: {
+    gap: 10,
+  },
+  typeCard: {
+    borderRadius: 14,
+    padding: 14,
+  },
+  typeCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  typeCardTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  typeIconBox: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  typeCardTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  radioCircle: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  radioDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  typeCardDescription: {
+    fontSize: 12,
+    lineHeight: 16,
+    marginLeft: 38,
   },
 });

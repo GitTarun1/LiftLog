@@ -90,12 +90,18 @@ export const FitnessStorage = {
     }
   },
 
-  async addExercise(name: string, category: Exercise['category'], notes?: string): Promise<Exercise> {
+  async addExercise(
+    name: string,
+    category: Exercise['category'],
+    exerciseType: Exercise['exerciseType'] = 'weight_reps',
+    notes?: string
+  ): Promise<Exercise> {
     const exercises = await this.getExercises();
     const newExercise: Exercise = {
       id: `ex-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       name: name.trim(),
       category,
+      exerciseType: exerciseType || 'weight_reps',
       notes: notes?.trim(),
       createdAt: Date.now(),
       isCustom: true,
@@ -242,22 +248,44 @@ export const FitnessStorage = {
     let maxWeight = 0;
     let maxVolume = 0;
     let estimated1RM = 0;
+    let maxReps = 0;
+    let totalReps = 0;
+    let maxDurationSeconds = 0;
+    let totalDurationSeconds = 0;
+
     let lastLoggedDate: string | undefined;
     let lastWeight: number | undefined;
     let lastReps: number | undefined;
+    let lastDurationSeconds: number | undefined;
     let lastSetsCount: number | undefined;
 
     exerciseLogs.forEach((log) => {
       let sessionVolume = 0;
       log.sets.forEach((set) => {
-        if (set.weight > maxWeight) {
-          maxWeight = set.weight;
+        const w = set.weight ?? 0;
+        const r = set.reps ?? 0;
+        const d = set.durationSeconds ?? 0;
+
+        if (w > maxWeight) {
+          maxWeight = w;
         }
-        sessionVolume += set.weight * set.reps;
+        if (r > maxReps) {
+          maxReps = r;
+        }
+        totalReps += r;
+
+        if (d > maxDurationSeconds) {
+          maxDurationSeconds = d;
+        }
+        totalDurationSeconds += d;
+
+        sessionVolume += w * r;
         // Epley formula: 1RM = Weight * (1 + Reps / 30)
-        const e1rm = Math.round(set.weight * (1 + set.reps / 30));
-        if (e1rm > estimated1RM) {
-          estimated1RM = e1rm;
+        if (w > 0 && r > 0) {
+          const e1rm = Math.round(w * (1 + r / 30));
+          if (e1rm > estimated1RM) {
+            estimated1RM = e1rm;
+          }
         }
       });
       if (sessionVolume > maxVolume) {
@@ -272,9 +300,10 @@ export const FitnessStorage = {
       lastLoggedDate = latest.date;
       lastSetsCount = latest.sets.length;
       if (latest.sets.length > 0) {
-        const topSet = [...latest.sets].sort((a, b) => b.weight - a.weight)[0];
+        const topSet = [...latest.sets].sort((a, b) => (b.weight ?? 0) - (a.weight ?? 0))[0];
         lastWeight = topSet.weight;
         lastReps = topSet.reps;
+        lastDurationSeconds = topSet.durationSeconds;
       }
     }
 
@@ -284,9 +313,14 @@ export const FitnessStorage = {
       maxWeight,
       maxVolume,
       estimated1RM: estimated1RM > 0 ? estimated1RM : maxWeight,
+      maxReps,
+      totalReps,
+      maxDurationSeconds,
+      totalDurationSeconds,
       lastLoggedDate,
       lastWeight,
       lastReps,
+      lastDurationSeconds,
       lastSetsCount,
     };
   },

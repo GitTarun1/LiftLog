@@ -91,10 +91,49 @@ export default function ExercisesScreen() {
     other: { bg: 'rgba(142, 142, 147, 0.12)', text: '#8E8E93' },
   };
 
+  const formatDuration = (seconds?: number) => {
+    if (!seconds || seconds <= 0) return '0s';
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    if (m > 0 && s > 0) return `${m}m ${s}s`;
+    if (m > 0) return `${m}m`;
+    return `${s}s`;
+  };
+
+  const TYPE_BADGES: Record<string, { label: string; icon: keyof typeof Ionicons.glyphMap }> = {
+    weight_reps: { label: 'Weight', icon: 'barbell-outline' },
+    reps_only: { label: 'Reps', icon: 'repeat-outline' },
+    duration: { label: 'Timer', icon: 'stopwatch-outline' },
+  };
+
   const renderExerciseItem = ({ item }: { item: Exercise }) => {
     const stats = exerciseStatsMap.get(item.id);
     const hasLogs = stats && stats.totalWorkouts > 0;
     const catStyle = CATEGORY_STYLES[item.category] || CATEGORY_STYLES.other;
+    const exType = item.exerciseType || 'weight_reps';
+    const typeBadge = TYPE_BADGES[exType] || TYPE_BADGES.weight_reps;
+
+    let lastLoggedSummary = '';
+    let prText = '';
+
+    if (hasLogs) {
+      if (exType === 'reps_only') {
+        lastLoggedSummary = `${stats.lastReps ?? 0} reps`;
+        if (stats.maxReps && stats.maxReps > 0) {
+          prText = `${stats.maxReps} reps`;
+        }
+      } else if (exType === 'duration') {
+        lastLoggedSummary = formatDuration(stats.lastDurationSeconds);
+        if (stats.maxDurationSeconds && stats.maxDurationSeconds > 0) {
+          prText = formatDuration(stats.maxDurationSeconds);
+        }
+      } else {
+        lastLoggedSummary = `${stats.lastWeight ?? 0} ${userPrefs.weightUnit} × ${stats.lastReps ?? 0} reps`;
+        if (stats.maxWeight && stats.maxWeight > 0) {
+          prText = `${stats.maxWeight} ${userPrefs.weightUnit}`;
+        }
+      }
+    }
 
     return (
       <TouchableOpacity
@@ -122,24 +161,36 @@ export default function ExercisesScreen() {
               </Text>
             </View>
 
+            <View style={[styles.typeBadge, { backgroundColor: theme.inputBackground }]}>
+              <Ionicons name={typeBadge.icon} size={11} color={theme.textSecondary} style={{ marginRight: 3 }} />
+              <Text style={[styles.typeBadgeText, { color: theme.textSecondary }]}>
+                {typeBadge.label}
+              </Text>
+            </View>
+
             {hasLogs ? (
               <Text style={[styles.lastLoggedText, { color: theme.textSecondary }]}>
-                {stats.lastWeight} {userPrefs.weightUnit} × {stats.lastReps} reps
+                {lastLoggedSummary}
               </Text>
             ) : (
               <Text style={[styles.noLogsText, { color: theme.textTertiary }]}>
-                Tap to log first workout
+                Tap to log
               </Text>
             )}
           </View>
         </View>
 
         <View style={styles.cardRight}>
-          {hasLogs && stats.maxWeight > 0 ? (
+          {hasLogs && prText ? (
             <View style={[styles.prBadgeWrapper, { backgroundColor: 'rgba(255, 159, 10, 0.1)' }]}>
-              <Ionicons name="trophy" size={11} color="#FF9F0A" style={{ marginRight: 3 }} />
+              <Ionicons
+                name={exType === 'duration' ? 'stopwatch' : 'trophy'}
+                size={11}
+                color="#FF9F0A"
+                style={{ marginRight: 3 }}
+              />
               <Text style={[styles.prValue, { color: '#FF9F0A' }]}>
-                {stats.maxWeight} {userPrefs.weightUnit}
+                {prText}
               </Text>
             </View>
           ) : null}
@@ -388,6 +439,17 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
     letterSpacing: 0.3,
+  },
+  typeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
+    borderRadius: 6,
+  },
+  typeBadgeText: {
+    fontSize: 10.5,
+    fontWeight: '600',
   },
   lastLoggedText: {
     fontSize: 13,
