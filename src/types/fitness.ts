@@ -78,3 +78,19 @@ export interface StreakStats {
   thisWeekCount: number;
   thisMonthCount: number;
 }
+
+export type HabitCategory = 'fitness' | 'nutrition' | 'wellness' | 'daily' | 'other';
+export type HabitFrequency = 'daily' | 'weekdays' | 'weekends';
+
+export interface Habit {
+  id: string;
+  title: string;
+  category: HabitCategory;
+  frequency: HabitFrequency;
+  icon?: string;
+  color?: string;
+  notes?: string;
+  createdAt: number;
+  completedDates: string[]; // List of YYYY-MM-DD strings
+}
+

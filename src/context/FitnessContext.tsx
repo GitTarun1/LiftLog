@@ -2,6 +2,9 @@ import React, { createContext, useContext, useEffect, useState, useCallback } fr
 import {
   BodyWeightEntry,
   Exercise,
+  Habit,
+  HabitCategory,
+  HabitFrequency,
   MuscleGroup,
   StreakStats,
   UserPreferences,
@@ -14,6 +17,7 @@ interface FitnessContextValue {
   exercises: Exercise[];
   workoutLogs: WorkoutLog[];
   bodyWeightEntries: BodyWeightEntry[];
+  habits: Habit[];
   userPrefs: UserPreferences;
   streakStats: StreakStats;
   isLoading: boolean;
@@ -33,8 +37,18 @@ interface FitnessContextValue {
   deleteWorkoutLog: (id: string) => Promise<void>;
   addBodyWeight: (weight: number, dateStr?: string, note?: string) => Promise<BodyWeightEntry>;
   deleteBodyWeight: (id: string) => Promise<void>;
+  addHabit: (habitData: {
+    title: string;
+    category: HabitCategory;
+    frequency?: HabitFrequency;
+    icon?: string;
+    color?: string;
+    notes?: string;
+  }) => Promise<Habit>;
+  toggleHabit: (id: string, dateStr?: string) => Promise<void>;
+  deleteHabit: (id: string) => Promise<void>;
+  updateHabit: (habit: Habit) => Promise<void>;
   updatePreferences: (prefs: Partial<UserPreferences>) => Promise<void>;
-  resetToDemo: () => Promise<void>;
   refreshData: () => Promise<void>;
 }
 
@@ -44,6 +58,7 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [exercises, setExercises] = useState<Exercise[]>([]);
   const [workoutLogs, setWorkoutLogs] = useState<WorkoutLog[]>([]);
   const [bodyWeightEntries, setBodyWeightEntries] = useState<BodyWeightEntry[]>([]);
+  const [habits, setHabits] = useState<Habit[]>([]);
   const [userPrefs, setUserPrefs] = useState<UserPreferences>({
     weightUnit: 'kg',
     colorTheme: 'dark',
@@ -61,17 +76,20 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const loadAll = useCallback(async () => {
     try {
       await FitnessStorage.initStorage();
-      const [storedExercises, storedLogs, storedWeights, storedPrefs] = await Promise.all([
-        FitnessStorage.getExercises(),
-        FitnessStorage.getWorkoutLogs(),
-        FitnessStorage.getBodyWeightEntries(),
-        FitnessStorage.getUserPreferences(),
-      ]);
+      const [storedExercises, storedLogs, storedWeights, storedPrefs, storedHabits] =
+        await Promise.all([
+          FitnessStorage.getExercises(),
+          FitnessStorage.getWorkoutLogs(),
+          FitnessStorage.getBodyWeightEntries(),
+          FitnessStorage.getUserPreferences(),
+          FitnessStorage.getHabits(),
+        ]);
 
       setExercises(storedExercises);
       setWorkoutLogs(storedLogs);
       setBodyWeightEntries(storedWeights);
       setUserPrefs(storedPrefs);
+      setHabits(storedHabits);
       setStreakStats(FitnessStorage.calculateStreakStats(storedLogs));
     } catch (e) {
       console.error('Error loading LiftLog state:', e);
@@ -141,15 +159,37 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setBodyWeightEntries((prev) => prev.filter((e) => e.id !== id));
   };
 
+  const addHabit = async (habitData: {
+    title: string;
+    category: HabitCategory;
+    frequency?: HabitFrequency;
+    icon?: string;
+    color?: string;
+    notes?: string;
+  }) => {
+    const created = await FitnessStorage.addHabit(habitData);
+    setHabits((prev) => [created, ...prev]);
+    return created;
+  };
+
+  const toggleHabit = async (id: string, dateStr?: string) => {
+    const updated = await FitnessStorage.toggleHabitCompletion(id, dateStr);
+    setHabits(updated);
+  };
+
+  const deleteHabit = async (id: string) => {
+    await FitnessStorage.deleteHabit(id);
+    setHabits((prev) => prev.filter((h) => h.id !== id));
+  };
+
+  const updateHabit = async (habit: Habit) => {
+    await FitnessStorage.updateHabit(habit);
+    setHabits((prev) => prev.map((h) => (h.id === habit.id ? habit : h)));
+  };
+
   const updatePreferences = async (prefs: Partial<UserPreferences>) => {
     const updated = await FitnessStorage.saveUserPreferences(prefs);
     setUserPrefs(updated);
-  };
-
-  const resetToDemo = async () => {
-    setIsLoading(true);
-    await FitnessStorage.resetToDemoData();
-    await loadAll();
   };
 
   return (
@@ -158,6 +198,7 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
         exercises,
         workoutLogs,
         bodyWeightEntries,
+        habits,
         userPrefs,
         streakStats,
         isLoading,
@@ -167,8 +208,11 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
         deleteWorkoutLog,
         addBodyWeight,
         deleteBodyWeight,
+        addHabit,
+        toggleHabit,
+        deleteHabit,
+        updateHabit,
         updatePreferences,
-        resetToDemo,
         refreshData: loadAll,
       }}
     >

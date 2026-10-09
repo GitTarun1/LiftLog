@@ -53,5 +53,10 @@ const styles = StyleSheet.create({
     padding: 16,
     borderWidth: 1,
     overflow: 'hidden',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 1.5,
   },
 });

@@ -1,6 +1,7 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
+  Platform,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -8,7 +9,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
@@ -20,9 +21,19 @@ import { FitnessStorage } from '@/services/storage';
 
 export default function StreakScreen() {
   const theme = useTheme();
-  const { streakStats, workoutLogs, exercises, userPrefs, resetToDemo, refreshData } = useFitness();
+  const insets = useSafeAreaInsets();
+  const bottomInset = insets.bottom > 0 ? insets.bottom : (Platform.OS === 'android' ? 12 : 8);
+
+  const { streakStats, workoutLogs, exercises, userPrefs, refreshData } = useFitness();
   const [isExporting, setIsExporting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+
+  const todayStr = useMemo(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  }, []);
+
+  const [inspectedDayStr, setInspectedDayStr] = useState<string>(todayStr);
 
   const handleExportBackup = async () => {
     setIsExporting(true);
@@ -30,6 +41,19 @@ export default function StreakScreen() {
       const json = await FitnessStorage.exportAllData();
       const dateStr = new Date().toISOString().split('T')[0];
       const fileName = `liftlog-backup-${dateStr}.json`;
+
+      if (Platform.OS === 'web') {
+        const blob = new Blob([json], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        a.click();
+        URL.revokeObjectURL(url);
+        Alert.alert('Export Complete', 'Backup file downloaded successfully.');
+        return;
+      }
+
       const baseDir = FileSystem.cacheDirectory || FileSystem.documentDirectory;
       if (!baseDir) {
         throw new Error('Device storage cache directory is not available.');
@@ -59,12 +83,13 @@ export default function StreakScreen() {
         copyToCacheDirectory: true,
       });
       if (result.canceled || !result.assets || result.assets.length === 0) return;
-      const fileUri = result.assets[0].uri;
-      const fileName = result.assets[0].name || 'backup file';
+      const fileAsset = result.assets[0];
+      const fileUri = fileAsset.uri;
+      const fileName = fileAsset.name || 'backup file';
 
       Alert.alert(
         'Restore Backup?',
-        `Restore data from "${fileName}"?\n\nThis will update your workout history, body weight logs, and exercises.`,
+        `Restore data from "${fileName}"?\n\nThis will update your workout history, habits, body weight logs, and exercises.`,
         [
           { text: 'Cancel', style: 'cancel' },
           {
@@ -73,10 +98,18 @@ export default function StreakScreen() {
             onPress: async () => {
               setIsImporting(true);
               try {
-                const json = await FileSystem.readAsStringAsync(fileUri, { encoding: FileSystem.EncodingType.UTF8 });
+                let json = '';
+                if (Platform.OS === 'web') {
+                  const response = await fetch(fileUri);
+                  json = await response.text();
+                } else {
+                  json = await FileSystem.readAsStringAsync(fileUri, {
+                    encoding: FileSystem.EncodingType.UTF8,
+                  });
+                }
                 await FitnessStorage.importAllData(json);
                 await refreshData();
-                Alert.alert('✅ Restore Complete', 'Your exercises, workout sessions, and weight logs have been successfully restored.');
+                Alert.alert('✅ Restore Complete', 'Your exercises, workout sessions, habits, and weight logs have been successfully restored.');
               } catch (e: any) {
                 Alert.alert('Import Failed', e?.message || 'Invalid or corrupted backup file format.');
               } finally {
@@ -91,85 +124,200 @@ export default function StreakScreen() {
     }
   };
 
-  // Active month navigation state
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const [inspectedDayStr, setInspectedDayStr] = useState<string>(
-    new Date().toISOString().split('T')[0]
-  );
-
-  // Set of dates that have workouts
-  const workoutDateSet = useMemo(() => {
-    return new Set(streakStats.workoutDates);
-  }, [streakStats.workoutDates]);
-
-  // Calendar month data generation
-  const calendarDays = useMemo(() => {
-    const year = selectedDate.getFullYear();
-    const month = selectedDate.getMonth();
-
-    const firstDayIndex = new Date(year, month, 1).getDay(); // 0 for Sunday
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-
-    const days = [];
-    // Padding for days before the 1st
-    for (let i = 0; i < firstDayIndex; i++) {
-      days.push({ dayNumber: 0, dateStr: '', isCurrentMonth: false });
-    }
-    // Days of current month
-    for (let d = 1; d <= daysInMonth; d++) {
-      const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-      days.push({ dayNumber: d, dateStr, isCurrentMonth: true });
-    }
-    return days;
-  }, [selectedDate]);
-
-  const monthTitle = useMemo(() => {
-    return selectedDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-  }, [selectedDate]);
-
-  const changeMonth = (delta: number) => {
-    const next = new Date(selectedDate.getFullYear(), selectedDate.getMonth() + delta, 1);
-    setSelectedDate(next);
-  };
-
   // Workouts logged on inspected date
   const inspectedWorkouts = useMemo(() => {
     return workoutLogs.filter((l) => l.date === inspectedDayStr);
   }, [workoutLogs, inspectedDayStr]);
 
   const exerciseMap = useMemo(() => {
-    const map = new Map();
+    const map = new Map<string, string>();
     exercises.forEach((ex) => map.set(ex.id, ex.name));
     return map;
   }, [exercises]);
 
-  const handleResetDemo = () => {
-    Alert.alert(
-      'Reset Demo Data',
-      'This will reload default exercises, 10 weeks of sample workout history, and body weight logs. Continue?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Reset Demo Data',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await resetToDemo();
-              Alert.alert('✅ Demo Data Restored', 'Sample workouts, exercises, and body weight history are now loaded.');
-            } catch (e: any) {
-              Alert.alert('Reset Failed', e?.message || 'Could not restore demo data.');
-            }
-          },
-        },
-      ]
-    );
+  // --- Volume Analysis per Date & Intensity Levels ---
+  const { dateMetricsMap, maxDailyVolume } = useMemo(() => {
+    const map = new Map<
+      string,
+      {
+        count: number;
+        volume: number; // total weight * reps
+        setsCount: number;
+        repsCount: number;
+      }
+    >();
+
+    let maxVol = 0;
+
+    workoutLogs.forEach((log) => {
+      if (!log.date) return;
+      let logVol = 0;
+      let logSets = (log.sets || []).length;
+      let logReps = 0;
+
+      (log.sets || []).forEach((s) => {
+        const w = s.weight ?? 0;
+        const r = s.reps ?? 0;
+        logVol += w * r;
+        logReps += r;
+      });
+
+      const existing = map.get(log.date) || {
+        count: 0,
+        volume: 0,
+        setsCount: 0,
+        repsCount: 0,
+      };
+
+      existing.count += 1;
+      existing.volume += logVol;
+      existing.setsCount += logSets;
+      existing.repsCount += logReps;
+
+      map.set(log.date, existing);
+
+      if (existing.volume > maxVol) {
+        maxVol = existing.volume;
+      }
+    });
+
+    return {
+      dateMetricsMap: map,
+      // Floor of 2,500 so light starting weights scale appropriately
+      maxDailyVolume: Math.max(maxVol, 2500),
+    };
+  }, [workoutLogs]);
+
+  // 24 Weeks Heatmap Grid — LeetCode style
+  const WEEKS_COUNT = 24;
+  // Each box: 13px wide + 3px gap = 16px per column
+  const BOX_SIZE = 13;
+  const BOX_GAP = 3;
+  const COL_WIDTH = BOX_SIZE + BOX_GAP; // 16px
+  const heatmapScrollRef = useRef<ScrollView>(null);
+
+  const { heatmapWeeks, monthHeaders } = useMemo(() => {
+    const now = new Date();
+    const currentDayOfWeek = now.getDay(); // 0 = Sun .. 6 = Sat
+
+    // Last column ends on upcoming Saturday
+    const endSaturday = new Date(now.getFullYear(), now.getMonth(), now.getDate() + (6 - currentDayOfWeek));
+    endSaturday.setHours(23, 59, 59, 999);
+
+    // Start Sunday is (WEEKS_COUNT * 7 - 1) days prior
+    const startSunday = new Date(endSaturday);
+    startSunday.setDate(endSaturday.getDate() - (WEEKS_COUNT * 7 - 1));
+    startSunday.setHours(0, 0, 0, 0);
+
+    const weeks: { weekIndex: number; days: any[] }[] = [];
+    const months: { weekIndex: number; label: string }[] = [];
+    let lastMonthSeen = -1;
+
+    for (let w = 0; w < WEEKS_COUNT; w++) {
+      const days: any[] = [];
+      for (let d = 0; d < 7; d++) {
+        const curDate = new Date(startSunday);
+        curDate.setDate(startSunday.getDate() + (w * 7 + d));
+
+        const y = curDate.getFullYear();
+        const mo = String(curDate.getMonth() + 1).padStart(2, '0');
+        const dayNum = String(curDate.getDate()).padStart(2, '0');
+        const dStr = `${y}-${mo}-${dayNum}`;
+
+        const isFuture = curDate.getTime() > now.getTime() && dStr !== todayStr;
+        const metrics = dateMetricsMap.get(dStr);
+        const count = isFuture ? 0 : (metrics?.count || 0);
+        const volume = isFuture ? 0 : (metrics?.volume || 0);
+        const setsCount = isFuture ? 0 : (metrics?.setsCount || 0);
+
+        // Intensity level 0-4 based on volume
+        let level = 0;
+        if (count > 0) {
+          if (volume > 0) {
+            const ratio = volume / maxDailyVolume;
+            if (ratio < 0.25) level = 1;
+            else if (ratio < 0.50) level = 2;
+            else if (ratio < 0.80) level = 3;
+            else level = 4;
+          } else {
+            if (setsCount <= 3) level = 1;
+            else if (setsCount <= 7) level = 2;
+            else if (setsCount <= 12) level = 3;
+            else level = 4;
+          }
+        }
+
+        // Month label: emit when this is day 1 of a new month
+        if (curDate.getDate() === 1 && curDate.getMonth() !== lastMonthSeen) {
+          lastMonthSeen = curDate.getMonth();
+          months.push({
+            weekIndex: w,
+            label: curDate.toLocaleString('en-US', { month: 'short' }),
+          });
+        }
+
+        days.push({ dateStr: dStr, dayOfWeek: d, count, volume, setsCount, level, isFuture, isToday: dStr === todayStr });
+      }
+      weeks.push({ weekIndex: w, days });
+    }
+
+    return {
+      heatmapWeeks: weeks,
+      monthHeaders: months,
+    };
+  }, [dateMetricsMap, maxDailyVolume, todayStr]);
+
+  // Auto-scroll heatmap to the right on mount
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      heatmapScrollRef.current?.scrollToEnd({ animated: false });
+    }, 150);
+    return () => clearTimeout(timer);
+  }, []);
+
+  const isDarkMode = theme.text === '#FFFFFF';
+
+  // Volume Level Color Resolver — 5 tiers like GitHub/LeetCode
+  const getBoxColor = (level: number, isFutureCell = false) => {
+    if (isFutureCell) return 'transparent';
+    if (isDarkMode) {
+      switch (level) {
+        case 1: return 'rgba(48, 209, 88, 0.22)';  // very light green
+        case 2: return 'rgba(48, 209, 88, 0.48)';  // medium green
+        case 3: return '#30D158';                   // solid iOS green
+        case 4: return '#26EE68';                   // bright neon green
+        default: return '#1E1E22';                  // dark empty cell
+      }
+    } else {
+      switch (level) {
+        case 1: return 'rgba(52, 199, 89, 0.22)';
+        case 2: return 'rgba(52, 199, 89, 0.55)';
+        case 3: return '#34C759';
+        case 4: return '#1A7F37';
+        default: return '#E0E0E5';
+      }
+    }
   };
 
-  const todayStr = new Date().toISOString().split('T')[0];
+  const formatInspectedDate = (dateStr: string) => {
+    try {
+      const [y, m, d] = dateStr.split('-').map(Number);
+      const dateObj = new Date(y, m - 1, d);
+      return dateObj.toLocaleDateString('en-US', {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+      });
+    } catch {
+      return dateStr;
+    }
+  };
+
+  const inspectedMetrics = dateMetricsMap.get(inspectedDayStr);
 
   return (
     <SafeAreaView edges={['top', 'left', 'right']} style={[styles.container, { backgroundColor: theme.background }]}>
-      <StatusBar barStyle={theme.text === '#FFFFFF' ? 'light-content' : 'dark-content'} />
+      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
 
       {/* Header */}
       <View style={styles.header}>
@@ -186,7 +334,7 @@ export default function StreakScreen() {
       </View>
 
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: 40 + bottomInset }]}
         showsVerticalScrollIndicator={false}
       >
         {/* Hero Streak Card */}
@@ -253,114 +401,149 @@ export default function StreakScreen() {
           </View>
         </IOSCard>
 
-        {/* Calendar Visualization Card */}
-        <IOSCard style={styles.calendarCard}>
-          {/* Calendar Header with Month Nav */}
-          <View style={styles.calHeader}>
-            <Text style={[styles.calMonthTitle, { color: theme.text }]}>
-              {monthTitle}
-            </Text>
-            <View style={styles.calNavBtns}>
-              <TouchableOpacity
-                onPress={() => changeMonth(-1)}
-                style={[styles.calArrow, { backgroundColor: theme.inputBackground }]}
-              >
-                <Ionicons name="chevron-back" size={16} color={theme.text} />
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => changeMonth(1)}
-                style={[styles.calArrow, { backgroundColor: theme.inputBackground }]}
-              >
-                <Ionicons name="chevron-forward" size={16} color={theme.text} />
-              </TouchableOpacity>
+        {/* Workout Consistency & Volume Heatmap Card */}
+        <IOSCard style={styles.heatmapCard}>
+          <View style={styles.heatmapHeaderRow}>
+            <View style={styles.heatmapTitleLeft}>
+              <View style={[styles.heatmapIconBadge, { backgroundColor: 'rgba(48, 209, 88, 0.15)' }]}>
+                <Ionicons name="barbell" size={17} color="#30D158" />
+              </View>
+              <View style={{ marginLeft: 10 }}>
+                <Text style={[styles.heatmapCardTitle, { color: theme.text }]}>
+                  Activity Heatmap
+                </Text>
+              </View>
+            </View>
+
+            <View style={[styles.activeDaysPill, { backgroundColor: 'rgba(48, 209, 88, 0.12)' }]}>
+              <Ionicons name="flash" size={12} color="#30D158" style={{ marginRight: 3 }} />
+              <Text style={[styles.activeDaysPillText, { color: '#30D158' }]}>
+                {streakStats.totalWorkoutDays} active
+              </Text>
             </View>
           </View>
 
-          {/* Days of week header */}
-          <View style={styles.weekDaysRow}>
-            {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, i) => (
-              <Text key={i} style={[styles.weekDayHeader, { color: theme.textSecondary }]}>
-                {day}
+          {/* Inspected Date Quick Bar */}
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => setInspectedDayStr(todayStr)}
+            style={[styles.inspectBar, { backgroundColor: theme.inputBackground }]}
+          >
+            <View style={styles.inspectBarLeft}>
+              <Ionicons name="calendar-outline" size={15} color={theme.tint} />
+              <Text style={[styles.inspectBarDate, { color: theme.text }]}>
+                {formatInspectedDate(inspectedDayStr)}
               </Text>
-            ))}
-          </View>
-
-          {/* Calendar Grid */}
-          <View style={styles.calGrid}>
-            {calendarDays.map((item, index) => {
-              if (!item.isCurrentMonth) {
-                return <View key={index} style={styles.calDayCell} />;
-              }
-
-              const hasWorkout = workoutDateSet.has(item.dateStr);
-              const isToday = item.dateStr === todayStr;
-              const isInspected = item.dateStr === inspectedDayStr;
-
-              return (
-                <TouchableOpacity
-                  key={index}
-                  activeOpacity={0.7}
-                  onPress={() => setInspectedDayStr(item.dateStr)}
-                  style={[
-                    styles.calDayCell,
-                    isInspected && {
-                      borderColor: theme.tint,
-                      borderWidth: 1.5,
-                      borderRadius: 12,
-                    },
-                  ]}
-                >
-                  <View
-                    style={[
-                      styles.calDayBubble,
-                      hasWorkout && { backgroundColor: '#34C759' },
-                      isToday && !hasWorkout && { borderColor: theme.tint, borderWidth: 1.5 },
-                    ]}
-                  >
-                    {hasWorkout ? (
-                      <Ionicons name="checkmark" size={14} color="#FFFFFF" />
-                    ) : (
-                      <Text
-                        style={[
-                          styles.calDayText,
-                          { color: hasWorkout ? '#FFFFFF' : theme.text },
-                          isToday && { color: theme.tint, fontWeight: '700' },
-                        ]}
-                      >
-                        {item.dayNumber}
-                      </Text>
-                    )}
-                  </View>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-
-          <View style={styles.calLegendRow}>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: '#34C759' }]} />
-              <Text style={[styles.legendText, { color: theme.textSecondary }]}>
-                Workout Completed
-              </Text>
+              {inspectedDayStr === todayStr && (
+                <View style={[styles.todayTag, { backgroundColor: theme.tint }]}>
+                  <Text style={styles.todayTagText}>Today</Text>
+                </View>
+              )}
             </View>
-            <View style={styles.legendItem}>
-              <View
-                style={[
-                  styles.legendDot,
-                  { borderColor: theme.tint, borderWidth: 1.5, backgroundColor: 'transparent' },
-                ]}
-              />
-              <Text style={[styles.legendText, { color: theme.textSecondary }]}>
-                Today
-              </Text>
+
+            <View style={styles.inspectBarRight}>
+              {inspectedMetrics && inspectedMetrics.count > 0 ? (
+                <View style={styles.inspectVolumeBadge}>
+                  <Text style={[styles.inspectVolumeText, { color: '#30D158' }]}>
+                    {inspectedMetrics.volume > 0
+                      ? `${inspectedMetrics.volume.toLocaleString()} ${userPrefs.weightUnit} • ${inspectedMetrics.setsCount} sets`
+                      : `${inspectedMetrics.setsCount} sets`}
+                  </Text>
+                </View>
+              ) : (
+                <Text style={[styles.inspectBarStatus, { color: theme.textSecondary }]}>
+                  Rest Day
+                </Text>
+              )}
             </View>
+          </TouchableOpacity>
+
+          {/* Heatmap Matrix with Aligned Day Labels */}
+          <View style={styles.heatmapWrapper}>
+            {/* Left Column — only Mon, Wed, Fri labels like GitHub */}
+            <View style={styles.dayLabelsCol}>
+              <View style={styles.monthHeaderSpacer} />
+              {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((dLabel, i) => (
+                <View key={i} style={styles.dayLabelRow}>
+                  <Text style={[styles.dayLabelText, { color: i % 2 === 1 ? theme.textSecondary : 'transparent' }]}>
+                    {dLabel}
+                  </Text>
+                </View>
+              ))}
+            </View>
+
+            {/* Horizontally scrollable weeks container */}
+            <ScrollView
+              ref={heatmapScrollRef}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.heatmapScrollContainer}
+            >
+              <View>
+                {/* Month labels row */}
+                <View style={styles.monthLabelsRow}>
+                  {monthHeaders.map((m, idx) => (
+                    <Text
+                      key={idx}
+                      style={[
+                        styles.monthLabelText,
+                        {
+                          left: m.weekIndex * COL_WIDTH,
+                          color: theme.textSecondary,
+                        },
+                      ]}
+                    >
+                      {m.label}
+                    </Text>
+                  ))}
+                </View>
+
+                {/* 24 Weeks Columns of 7 Days */}
+                <View style={styles.weeksGridRow}>
+                  {heatmapWeeks.map((week) => (
+                    <View key={week.weekIndex} style={styles.weekColumn}>
+                      {week.days.map((day) => {
+                        if (day.isFuture) {
+                          return <View key={day.dateStr} style={[styles.dayBox, { backgroundColor: 'transparent' }]} />;
+                        }
+
+                        const isInspected = day.dateStr === inspectedDayStr;
+                        const boxBg = getBoxColor(day.level);
+
+                        return (
+                          <TouchableOpacity
+                            key={day.dateStr}
+                            activeOpacity={0.7}
+                            onPress={() => setInspectedDayStr(day.dateStr)}
+                            style={[
+                              styles.dayBox,
+                              { backgroundColor: boxBg },
+                              day.isToday && day.count === 0 && {
+                                borderColor: theme.tint,
+                                borderWidth: 1.5,
+                              },
+                              isInspected && {
+                                borderColor: isDarkMode ? 'rgba(255,255,255,0.9)' : '#007AFF',
+                                borderWidth: 2,
+                                transform: [{ scale: 1.2 }],
+                                zIndex: 10,
+                              },
+                            ]}
+                          />
+                        );
+                      })}
+                    </View>
+                  ))}
+                </View>
+              </View>
+            </ScrollView>
           </View>
         </IOSCard>
 
         {/* Selected Day Workout Details */}
         <View style={styles.inspectedSection}>
           <Text style={[styles.sectionTitle, { color: theme.text }]}>
-            Workouts on {inspectedDayStr}
+            Workouts on {formatInspectedDate(inspectedDayStr)}
           </Text>
 
           {inspectedWorkouts.length > 0 ? (
@@ -370,7 +553,7 @@ export default function StreakScreen() {
               return (
                 <IOSCard key={log.id} style={styles.workoutLogCard}>
                   <View style={styles.logCardHeader}>
-                    <View>
+                    <View style={{ flex: 1, marginRight: 8 }}>
                       <Text style={[styles.logExerciseName, { color: theme.text }]}>
                         {exName}
                       </Text>
@@ -380,7 +563,7 @@ export default function StreakScreen() {
                         </Text>
                       ) : null}
                     </View>
-                    <View style={styles.setCountPill}>
+                    <View style={[styles.setCountPill, { backgroundColor: 'rgba(10, 132, 255, 0.12)' }]}>
                       <Text style={[styles.setCountText, { color: theme.tint }]}>
                         {log.sets.length} sets
                       </Text>
@@ -426,15 +609,15 @@ export default function StreakScreen() {
                 { backgroundColor: theme.card, borderColor: theme.border },
               ]}
             >
-              <Ionicons name="barbell-outline" size={24} color={theme.textTertiary} />
+              <Ionicons name="barbell-outline" size={26} color={theme.textTertiary} />
               <Text style={[styles.emptyInspectedText, { color: theme.textSecondary }]}>
-                No workouts logged for this date.
+                Rest Day • No workouts logged on this date.
               </Text>
             </View>
           )}
         </View>
 
-        {/* Local Storage, Backup & Reset Footer */}
+        {/* Local Storage & Backup Footer */}
         <IOSCard style={styles.settingsCard}>
           <View style={styles.storageInfoRow}>
             <Ionicons name="cloud-offline-outline" size={22} color={theme.tint} />
@@ -443,7 +626,7 @@ export default function StreakScreen() {
                 100% Local & Offline
               </Text>
               <Text style={[styles.storageSub, { color: theme.textSecondary }]}>
-                All data is stored on your device. Use backup to transfer data or keep a safe copy.
+                All data is stored securely on your device. Export backups anytime to keep your data safe.
               </Text>
             </View>
           </View>
@@ -460,7 +643,7 @@ export default function StreakScreen() {
                 {isExporting ? 'Exporting...' : 'Export Backup'}
               </Text>
               <Text style={[styles.actionBtnSub, { color: theme.textSecondary }]}>
-                Save a JSON file with all your data
+                Save a JSON file with all your workout history & habits
               </Text>
             </View>
             <Ionicons name="chevron-forward" size={16} color={theme.textTertiary} />
@@ -472,27 +655,16 @@ export default function StreakScreen() {
             disabled={isImporting}
             style={[styles.actionBtn, { borderTopColor: theme.border, borderTopWidth: StyleSheet.hairlineWidth }]}
           >
-            <Ionicons name="download-outline" size={18} color='#30D158' />
+            <Ionicons name="download-outline" size={18} color="#30D158" />
             <View style={{ flex: 1, marginLeft: 10 }}>
               <Text style={[styles.actionBtnTitle, { color: theme.text }]}>
                 {isImporting ? 'Restoring...' : 'Import Backup'}
               </Text>
               <Text style={[styles.actionBtnSub, { color: theme.textSecondary }]}>
-                Restore data from a backup file
+                Restore all data from a previously saved backup file
               </Text>
             </View>
             <Ionicons name="chevron-forward" size={16} color={theme.textTertiary} />
-          </TouchableOpacity>
-
-          {/* Reset Demo */}
-          <TouchableOpacity
-            onPress={handleResetDemo}
-            style={[styles.resetBtn, { borderTopColor: theme.border }]}
-          >
-            <Ionicons name="refresh-outline" size={16} color={theme.textSecondary} />
-            <Text style={[styles.resetText, { color: theme.textSecondary }]}>
-              Reset Sample Demo Data
-            </Text>
           </TouchableOpacity>
         </IOSCard>
       </ScrollView>
@@ -532,7 +704,6 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: 16,
-    paddingBottom: 32,
   },
   heroCard: {
     padding: 18,
@@ -606,88 +777,179 @@ const styles = StyleSheet.create({
     height: 24,
     backgroundColor: 'rgba(142, 142, 147, 0.25)',
   },
-  calendarCard: {
+
+  /* Volume Heatmap Styles */
+  heatmapCard: {
     padding: 16,
-    marginBottom: 20,
+    marginBottom: 16,
   },
-  calHeader: {
+  heatmapHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 12,
   },
-  calMonthTitle: {
-    fontSize: 18,
+  heatmapTitleLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  heatmapIconBadge: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heatmapCardTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: -0.3,
+  },
+  heatmapCardSub: {
+    fontSize: 11,
+    fontWeight: '500',
+    marginTop: 1,
+  },
+  activeDaysPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 10,
+    marginLeft: 8,
+  },
+  activeDaysPillText: {
+    fontSize: 11,
     fontWeight: '700',
   },
-  calNavBtns: {
+  inspectBar: {
     flexDirection: 'row',
-    gap: 8,
-  },
-  calArrow: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 10,
+    marginBottom: 14,
   },
-  weekDaysRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginBottom: 10,
-  },
-  weekDayHeader: {
-    width: 36,
-    textAlign: 'center',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  calGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
-  calDayCell: {
-    width: '14.28%',
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 2,
-  },
-  calDayBubble: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  calDayText: {
-    fontSize: 13,
-    fontWeight: '500',
-  },
-  calLegendRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 16,
-    marginTop: 14,
-    paddingTop: 12,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(142, 142, 147, 0.2)',
-  },
-  legendItem: {
+  inspectBarLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
-  legendDot: {
-    width: 10,
-    height: 10,
+  inspectBarDate: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  todayTag: {
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
     borderRadius: 5,
+    marginLeft: 4,
   },
-  legendText: {
+  todayTagText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  inspectBarRight: {
+    alignItems: 'flex-end',
+  },
+  inspectVolumeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  inspectVolumeText: {
     fontSize: 12,
+    fontWeight: '700',
   },
+  inspectBarStatus: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  heatmapWrapper: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  dayLabelsCol: {
+    marginRight: 5,
+    paddingTop: 1,
+  },
+  monthHeaderSpacer: {
+    height: 22, // matches monthLabelsRow height + marginBottom
+  },
+  dayLabelRow: {
+    height: 13,   // = BOX_SIZE
+    marginBottom: 3, // = BOX_GAP
+    justifyContent: 'center',
+  },
+  dayLabelText: {
+    fontSize: 9,
+    fontWeight: '500',
+    textAlign: 'right',
+    width: 14,
+    letterSpacing: -0.2,
+  },
+  heatmapScrollContainer: {
+    paddingRight: 4,
+  },
+  monthLabelsRow: {
+    height: 16,
+    position: 'relative',
+    marginBottom: 6,
+  },
+  monthLabelText: {
+    position: 'absolute',
+    fontSize: 10,
+    fontWeight: '700',
+    top: 0,
+    letterSpacing: 0.1,
+  },
+  weeksGridRow: {
+    flexDirection: 'row',
+  },
+  weekColumn: {
+    flexDirection: 'column',
+    marginRight: 3,
+  },
+  dayBox: {
+    width: 13,
+    height: 13,
+    marginBottom: 3,
+    borderRadius: 2.5,
+  },
+  heatmapLegendRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 14,
+    paddingTop: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  legendStatsText: {
+    fontSize: 11,
+    fontWeight: '500',
+    flex: 1,
+    marginRight: 8,
+  },
+  legendScale: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  legendScaleText: {
+    fontSize: 10,
+    fontWeight: '500',
+  },
+  legendBox: {
+    width: 11,
+    height: 11,
+    borderRadius: 2.5,
+  },
+
+  /* Inspected Section */
   inspectedSection: {
-    marginBottom: 20,
+    marginBottom: 16,
   },
   sectionTitle: {
     fontSize: 17,
@@ -746,6 +1008,8 @@ const styles = StyleSheet.create({
   emptyInspectedText: {
     fontSize: 13,
   },
+
+  /* Settings Footer */
   settingsCard: {
     padding: 16,
   },
@@ -774,18 +1038,5 @@ const styles = StyleSheet.create({
   actionBtnSub: {
     fontSize: 12,
     marginTop: 1,
-  },
-  resetBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 14,
-    paddingTop: 12,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    gap: 6,
-  },
-  resetText: {
-    fontSize: 13,
-    fontWeight: '500',
   },
 });

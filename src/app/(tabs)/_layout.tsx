@@ -46,6 +46,19 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="habits"
+        options={{
+          title: 'Habits',
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons
+              name={focused ? 'list-circle' : 'list-circle-outline'}
+              size={26}
+              color={focused ? '#30D158' : color}
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="bodyweight"
         options={{
           title: 'Body Weight',

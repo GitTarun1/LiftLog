@@ -3,14 +3,16 @@ import {
   BodyWeightEntry,
   Exercise,
   ExerciseStats,
+  Habit,
+  HabitCategory,
+  HabitFrequency,
   StreakStats,
   UserPreferences,
   WorkoutLog,
 } from '../types/fitness';
 import {
   DEFAULT_EXERCISES,
-  generateInitialBodyWeight,
-  generateInitialLogs,
+  DEFAULT_HABITS,
 } from './seedData';
 
 const STORAGE_KEYS = {
@@ -18,7 +20,8 @@ const STORAGE_KEYS = {
   WORKOUT_LOGS: '@liftlog_workout_logs_v1',
   BODY_WEIGHT: '@liftlog_body_weight_v1',
   USER_PREFS: '@liftlog_user_prefs_v1',
-  INITIALIZED: '@liftlog_initialized_v1',
+  INITIALIZED: '@liftlog_initialized_v5',
+  HABITS: '@liftlog_habits_v1',
 };
 
 const DEFAULT_PREFERENCES: UserPreferences = {
@@ -27,27 +30,105 @@ const DEFAULT_PREFERENCES: UserPreferences = {
 };
 
 export const FitnessStorage = {
-  // Ensure default demo data is populated on first app launch
+  // Ensure default clean data is initialized without any dummy sample data
   async initStorage(): Promise<void> {
     try {
       const initialized = await AsyncStorage.getItem(STORAGE_KEYS.INITIALIZED);
       if (!initialized) {
-        await AsyncStorage.setItem(
-          STORAGE_KEYS.EXERCISES,
-          JSON.stringify(DEFAULT_EXERCISES)
-        );
-        await AsyncStorage.setItem(
-          STORAGE_KEYS.WORKOUT_LOGS,
-          JSON.stringify(generateInitialLogs())
-        );
-        await AsyncStorage.setItem(
-          STORAGE_KEYS.BODY_WEIGHT,
-          JSON.stringify(generateInitialBodyWeight())
-        );
-        await AsyncStorage.setItem(
-          STORAGE_KEYS.USER_PREFS,
-          JSON.stringify(DEFAULT_PREFERENCES)
-        );
+        // Clean out sample exercises (preserve any custom user-added exercises)
+        const existingEx = await AsyncStorage.getItem(STORAGE_KEYS.EXERCISES);
+        if (!existingEx) {
+          await AsyncStorage.setItem(STORAGE_KEYS.EXERCISES, JSON.stringify([]));
+        } else {
+          try {
+            const parsedEx: Exercise[] = JSON.parse(existingEx);
+            // Keep only explicitly user-created exercises
+            const cleanedEx = parsedEx.filter(
+              (e) =>
+                e.isCustom === true &&
+                !e.id.startsWith('ex-bench-') &&
+                !e.id.startsWith('ex-squat') &&
+                !e.id.startsWith('ex-deadlift') &&
+                !e.id.startsWith('ex-overhead-') &&
+                !e.id.startsWith('ex-barbell-') &&
+                !e.id.startsWith('ex-incline-') &&
+                !e.id.startsWith('ex-pullup') &&
+                !e.id.startsWith('ex-pushup') &&
+                !e.id.startsWith('ex-plank') &&
+                !e.id.startsWith('ex-romanian-') &&
+                !e.id.startsWith('ex-lateral-') &&
+                !e.id.startsWith('ex-bicep-') &&
+                !e.id.startsWith('ex-tricep-') &&
+                !e.id.startsWith('ex-hanging-')
+            );
+            await AsyncStorage.setItem(STORAGE_KEYS.EXERCISES, JSON.stringify(cleanedEx));
+          } catch {
+            await AsyncStorage.setItem(STORAGE_KEYS.EXERCISES, JSON.stringify([]));
+          }
+        }
+
+        // Clean out sample workout logs
+        const existingLogs = await AsyncStorage.getItem(STORAGE_KEYS.WORKOUT_LOGS);
+        if (!existingLogs) {
+          await AsyncStorage.setItem(STORAGE_KEYS.WORKOUT_LOGS, JSON.stringify([]));
+        } else {
+          try {
+            const parsedLogs: WorkoutLog[] = JSON.parse(existingLogs);
+            const cleanedLogs = parsedLogs.filter(
+              (l) =>
+                !l.id.startsWith('log-bench-') &&
+                !l.id.startsWith('log-squat-') &&
+                !l.id.startsWith('log-dl-') &&
+                !l.id.startsWith('log-ohp-') &&
+                !l.id.startsWith('log-recent-')
+            );
+            await AsyncStorage.setItem(STORAGE_KEYS.WORKOUT_LOGS, JSON.stringify(cleanedLogs));
+          } catch {
+            await AsyncStorage.setItem(STORAGE_KEYS.WORKOUT_LOGS, JSON.stringify([]));
+          }
+        }
+
+        // Clean out sample body weight entries
+        const existingBw = await AsyncStorage.getItem(STORAGE_KEYS.BODY_WEIGHT);
+        if (!existingBw) {
+          await AsyncStorage.setItem(STORAGE_KEYS.BODY_WEIGHT, JSON.stringify([]));
+        } else {
+          try {
+            const parsedBw: BodyWeightEntry[] = JSON.parse(existingBw);
+            const cleanedBw = parsedBw.filter((e) => !/^bw-\d{1,2}$/.test(e.id));
+            await AsyncStorage.setItem(STORAGE_KEYS.BODY_WEIGHT, JSON.stringify(cleanedBw));
+          } catch {
+            await AsyncStorage.setItem(STORAGE_KEYS.BODY_WEIGHT, JSON.stringify([]));
+          }
+        }
+
+        // Clean out sample habits
+        const existingHabits = await AsyncStorage.getItem(STORAGE_KEYS.HABITS);
+        if (!existingHabits) {
+          await AsyncStorage.setItem(STORAGE_KEYS.HABITS, JSON.stringify([]));
+        } else {
+          try {
+            const parsedHabits: Habit[] = JSON.parse(existingHabits);
+            const cleanedHabits = parsedHabits.filter(
+              (h) =>
+                !h.id.startsWith('habit-water') &&
+                !h.id.startsWith('habit-creatine') &&
+                !h.id.startsWith('habit-stretch')
+            );
+            await AsyncStorage.setItem(STORAGE_KEYS.HABITS, JSON.stringify(cleanedHabits));
+          } catch {
+            await AsyncStorage.setItem(STORAGE_KEYS.HABITS, JSON.stringify([]));
+          }
+        }
+
+        const existingPrefs = await AsyncStorage.getItem(STORAGE_KEYS.USER_PREFS);
+        if (!existingPrefs) {
+          await AsyncStorage.setItem(
+            STORAGE_KEYS.USER_PREFS,
+            JSON.stringify(DEFAULT_PREFERENCES)
+          );
+        }
+
         await AsyncStorage.setItem(STORAGE_KEYS.INITIALIZED, 'true');
       }
     } catch (e) {
@@ -55,25 +136,6 @@ export const FitnessStorage = {
     }
   },
 
-  // Reset demo data
-  async resetToDemoData(): Promise<void> {
-    await AsyncStorage.setItem(
-      STORAGE_KEYS.EXERCISES,
-      JSON.stringify(DEFAULT_EXERCISES)
-    );
-    await AsyncStorage.setItem(
-      STORAGE_KEYS.WORKOUT_LOGS,
-      JSON.stringify(generateInitialLogs())
-    );
-    await AsyncStorage.setItem(
-      STORAGE_KEYS.BODY_WEIGHT,
-      JSON.stringify(generateInitialBodyWeight())
-    );
-    await AsyncStorage.setItem(
-      STORAGE_KEYS.USER_PREFS,
-      JSON.stringify(DEFAULT_PREFERENCES)
-    );
-  },
 
   // --- Exercises ---
   async getExercises(): Promise<Exercise[]> {
@@ -240,6 +302,123 @@ export const FitnessStorage = {
     const updated = { ...current, ...prefs };
     await AsyncStorage.setItem(STORAGE_KEYS.USER_PREFS, JSON.stringify(updated));
     return updated;
+  },
+
+  // --- Habits & Daily Tasks ---
+  async getHabits(): Promise<Habit[]> {
+    try {
+      const data = await AsyncStorage.getItem(STORAGE_KEYS.HABITS);
+      if (!data) {
+        await this.initStorage();
+        return DEFAULT_HABITS;
+      }
+      return JSON.parse(data);
+    } catch (e) {
+      console.error('Error getting habits:', e);
+      return DEFAULT_HABITS;
+    }
+  },
+
+  async addHabit(habitData: {
+    title: string;
+    category: HabitCategory;
+    frequency?: HabitFrequency;
+    icon?: string;
+    color?: string;
+    notes?: string;
+  }): Promise<Habit> {
+    const habits = await this.getHabits();
+    const newHabit: Habit = {
+      id: `habit-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      title: habitData.title.trim(),
+      category: habitData.category,
+      frequency: habitData.frequency || 'daily',
+      icon: habitData.icon,
+      color: habitData.color,
+      notes: habitData.notes?.trim(),
+      createdAt: Date.now(),
+      completedDates: [],
+    };
+    const updated = [newHabit, ...habits];
+    await AsyncStorage.setItem(STORAGE_KEYS.HABITS, JSON.stringify(updated));
+    return newHabit;
+  },
+
+  async toggleHabitCompletion(id: string, dateStr?: string): Promise<Habit[]> {
+    const habits = await this.getHabits();
+    const targetDate = dateStr || new Date().toISOString().split('T')[0];
+    const updated = habits.map((h) => {
+      if (h.id !== id) return h;
+      const set = new Set(h.completedDates || []);
+      if (set.has(targetDate)) {
+        set.delete(targetDate);
+      } else {
+        set.add(targetDate);
+      }
+      return {
+        ...h,
+        completedDates: Array.from(set).sort(),
+      };
+    });
+    await AsyncStorage.setItem(STORAGE_KEYS.HABITS, JSON.stringify(updated));
+    return updated;
+  },
+
+  async deleteHabit(id: string): Promise<void> {
+    const habits = await this.getHabits();
+    const filtered = habits.filter((h) => h.id !== id);
+    await AsyncStorage.setItem(STORAGE_KEYS.HABITS, JSON.stringify(filtered));
+  },
+
+  async updateHabit(updatedHabit: Habit): Promise<void> {
+    const habits = await this.getHabits();
+    const index = habits.findIndex((h) => h.id === updatedHabit.id);
+    if (index >= 0) {
+      habits[index] = updatedHabit;
+      await AsyncStorage.setItem(STORAGE_KEYS.HABITS, JSON.stringify(habits));
+    }
+  },
+
+  calculateHabitStreak(habit: Habit, referenceDateStr?: string): number {
+    if (!habit.completedDates || habit.completedDates.length === 0) return 0;
+    const completedSet = new Set(habit.completedDates);
+
+    const now = referenceDateStr ? new Date(referenceDateStr) : new Date();
+    const refYear = now.getFullYear();
+    const refMonth = now.getMonth();
+    const refDate = now.getDate();
+
+    const formatD = (d: Date) => {
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    };
+
+    const todayDate = new Date(refYear, refMonth, refDate);
+    const todayStr = formatD(todayDate);
+    const yesterdayDate = new Date(todayDate.getTime() - 86400000);
+    const yesterdayStr = formatD(yesterdayDate);
+
+    let streak = 0;
+    let checkDate: Date;
+
+    if (completedSet.has(todayStr)) {
+      checkDate = todayDate;
+    } else if (completedSet.has(yesterdayStr)) {
+      checkDate = yesterdayDate;
+    } else {
+      return 0;
+    }
+
+    while (true) {
+      const dStr = formatD(checkDate);
+      if (completedSet.has(dStr)) {
+        streak += 1;
+        checkDate = new Date(checkDate.getTime() - 86400000);
+      } else {
+        break;
+      }
+    }
+
+    return streak;
   },
 
   // --- Analytics & Computations ---
@@ -436,11 +615,12 @@ export const FitnessStorage = {
 
   // --- Backup / Restore ---
   async exportAllData(): Promise<string> {
-    const [exercises, workoutLogs, bodyWeightEntries, userPrefs] = await Promise.all([
+    const [exercises, workoutLogs, bodyWeightEntries, userPrefs, habits] = await Promise.all([
       this.getExercises(),
       this.getWorkoutLogs(),
       this.getBodyWeightEntries(),
       this.getUserPreferences(),
+      this.getHabits(),
     ]);
     const payload = {
       appName: 'LiftLog',
@@ -450,6 +630,7 @@ export const FitnessStorage = {
       workoutLogs,
       bodyWeightEntries,
       userPrefs,
+      habits,
     };
     return JSON.stringify(payload, null, 2);
   },
@@ -474,8 +655,9 @@ export const FitnessStorage = {
     const workoutLogs = Array.isArray(payload.workoutLogs) ? payload.workoutLogs : null;
     const bodyWeightEntries = Array.isArray(payload.bodyWeightEntries) ? payload.bodyWeightEntries : null;
     const userPrefs = payload.userPrefs && typeof payload.userPrefs === 'object' ? payload.userPrefs : null;
+    const habits = Array.isArray(payload.habits) ? payload.habits : null;
 
-    if (!exercises && !workoutLogs && !bodyWeightEntries) {
+    if (!exercises && !workoutLogs && !bodyWeightEntries && !habits) {
       throw new Error('The selected file does not contain valid LiftLog data.');
     }
 
@@ -490,6 +672,9 @@ export const FitnessStorage = {
     }
     if (userPrefs) {
       await AsyncStorage.setItem(STORAGE_KEYS.USER_PREFS, JSON.stringify(userPrefs));
+    }
+    if (habits) {
+      await AsyncStorage.setItem(STORAGE_KEYS.HABITS, JSON.stringify(habits));
     }
     await AsyncStorage.setItem(STORAGE_KEYS.INITIALIZED, 'true');
   },

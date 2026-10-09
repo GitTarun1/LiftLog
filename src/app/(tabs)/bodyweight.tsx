@@ -6,9 +6,10 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
+  Platform,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFitness } from '@/context/FitnessContext';
 import { useTheme } from '@/hooks/use-theme';
@@ -19,6 +20,8 @@ import { BodyWeightEntry } from '@/types/fitness';
 
 export default function BodyWeightScreen() {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
+  const bottomInset = insets.bottom > 0 ? insets.bottom : (Platform.OS === 'android' ? 12 : 8);
   const { bodyWeightEntries, userPrefs, addBodyWeight, deleteBodyWeight } = useFitness();
   const [timeframe, setTimeframe] = useState<TimeRange>('1M');
   const [isModalVisible, setIsModalVisible] = useState(false);
@@ -146,7 +149,7 @@ export default function BodyWeightScreen() {
       <FlatList
         data={bodyWeightEntries}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: 40 + bottomInset }]}
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={
           <>
@@ -156,7 +159,7 @@ export default function BodyWeightScreen() {
                 <Text style={[styles.metricLabel, { color: theme.textSecondary }]}>
                   CURRENT
                 </Text>
-                <Text style={[styles.metricValue, { color: theme.text }]}>
+                <Text style={[styles.metricValue, { color: theme.text }]} numberOfLines={1} adjustsFontSizeToFit>
                   {currentWeight !== null ? `${currentWeight} ${userPrefs.weightUnit}` : '--'}
                 </Text>
                 <Text style={[styles.metricSub, { color: theme.textSecondary }]}>
@@ -168,7 +171,7 @@ export default function BodyWeightScreen() {
                 <Text style={[styles.metricLabel, { color: theme.textSecondary }]}>
                   7-DAY AVG
                 </Text>
-                <Text style={[styles.metricValue, { color: theme.text }]}>
+                <Text style={[styles.metricValue, { color: theme.text }]} numberOfLines={1} adjustsFontSizeToFit>
                   {last7DaysAverage !== null ? `${last7DaysAverage} ${userPrefs.weightUnit}` : '--'}
                 </Text>
                 <Text style={[styles.metricSub, { color: theme.textSecondary }]}>
@@ -192,6 +195,8 @@ export default function BodyWeightScreen() {
                           : theme.text,
                     },
                   ]}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
                 >
                   {totalChange > 0 ? `+${totalChange.toFixed(1)}` : totalChange.toFixed(1)}{' '}
                   {userPrefs.weightUnit}

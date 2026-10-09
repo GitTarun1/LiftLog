@@ -7,9 +7,10 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  Platform,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useFitness } from '@/context/FitnessContext';
@@ -32,6 +33,8 @@ const CATEGORY_FILTERS: { label: string; value: 'all' | MuscleGroup }[] = [
 export default function ExercisesScreen() {
   const router = useRouter();
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
+  const bottomInset = insets.bottom > 0 ? insets.bottom : (Platform.OS === 'android' ? 12 : 8);
   const {
     exercises,
     workoutLogs,
@@ -294,7 +297,7 @@ export default function ExercisesScreen() {
         data={filteredExercises}
         keyExtractor={(item) => item.id}
         renderItem={renderExerciseItem}
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={[styles.listContent, { paddingBottom: 40 + bottomInset }]}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.tint} />
         }

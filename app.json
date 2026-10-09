@@ -7,17 +7,25 @@
     "icon": "./assets/images/icon.png",
     "scheme": "liftlog",
     "userInterfaceStyle": "automatic",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/d3733476-e55f-42d4-86b5-64ee47169a23"
+    },
     "ios": {
-      "icon": "./assets/images/icon.png"
+      "icon": "./assets/images/icon.png",
+      "supportsTablet": true
     },
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#0A0A0C",
         "foregroundImage": "./assets/images/android-icon-foreground.png"
       },
-      "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.tarunexpoo.LiftLog"
+      "package": "com.tarunexpoo.LiftLog",
+      "versionCode": 1,
+      "allowBackup": true
     },
     "web": {
       "output": "static",
@@ -33,7 +41,8 @@
           "imageWidth": 76
         }
       ],
-      "expo-sharing"
+      "expo-sharing",
+      "expo-updates"
     ],
     "experiments": {
       "typedRoutes": true,
