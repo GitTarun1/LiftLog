@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Platform,
   ScrollView,
@@ -11,6 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import * as Updates from 'expo-updates';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
@@ -27,6 +29,63 @@ export default function StreakScreen() {
   const { streakStats, workoutLogs, exercises, userPrefs, refreshData } = useFitness();
   const [isExporting, setIsExporting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
+  const [updateStatusText, setUpdateStatusText] = useState<string | null>(null);
+
+  const handleCheckForUpdates = async () => {
+    if (isCheckingUpdate) return;
+    setIsCheckingUpdate(true);
+    setUpdateStatusText('Checking...');
+    try {
+      if (!Updates.isEnabled) {
+        Alert.alert(
+          'Dev / Preview Mode',
+          'Over-The-Air updates are only enabled in standalone production builds.'
+        );
+        return;
+      }
+
+      setUpdateStatusText('Connecting to EAS...');
+      const checkResult = await Updates.checkForUpdateAsync();
+
+      if (checkResult.isAvailable) {
+        setUpdateStatusText('Downloading...');
+        await Updates.fetchUpdateAsync();
+        setUpdateStatusText('Downloaded!');
+
+        Alert.alert(
+          'Update Ready 🎉',
+          'A new update was downloaded successfully. Would you like to restart the app now to apply it?',
+          [
+            {
+              text: 'Later',
+              style: 'cancel',
+            },
+            {
+              text: 'Restart Now',
+              style: 'default',
+              onPress: async () => {
+                await Updates.reloadAsync();
+              },
+            },
+          ]
+        );
+      } else {
+        Alert.alert(
+          'Up to Date! 🎉',
+          `You are already on the latest version!\n\nChannel: ${Updates.channel || 'production'}\nUpdate ID: ${Updates.updateId ? Updates.updateId.slice(0, 8) + '...' : 'Embedded bundle'}`
+        );
+      }
+    } catch (e: any) {
+      Alert.alert(
+        'Update Check Failed',
+        e?.message || 'Could not connect to update servers. Please check your internet connection.'
+      );
+    } finally {
+      setIsCheckingUpdate(false);
+      setUpdateStatusText(null);
+    }
+  };
 
   const todayStr = useMemo(() => {
     const now = new Date();
@@ -333,8 +392,32 @@ export default function StreakScreen() {
           <Text style={[styles.largeTitle, { color: theme.text }]}>Streaks</Text>
         </View>
 
-        <View style={[styles.flameIconWrapper, { backgroundColor: 'rgba(255, 69, 58, 0.15)' }]}>
-          <Ionicons name="flame" size={24} color="#FF453A" />
+        <View style={styles.headerActions}>
+          <TouchableOpacity
+            activeOpacity={0.75}
+            onPress={handleCheckForUpdates}
+            disabled={isCheckingUpdate}
+            style={[
+              styles.otaHeaderBtn,
+              {
+                backgroundColor: isDarkMode ? '#1E1E22' : '#FFFFFF',
+                borderColor: theme.border,
+              },
+            ]}
+          >
+            {isCheckingUpdate ? (
+              <ActivityIndicator size="small" color="#E05368" />
+            ) : (
+              <Ionicons name="sparkles" size={15} color="#E05368" />
+            )}
+            <Text style={[styles.otaHeaderBtnText, { color: theme.text }]}>
+              {isCheckingUpdate ? (updateStatusText || 'Checking...') : 'Check Update'}
+            </Text>
+          </TouchableOpacity>
+
+          <View style={[styles.flameIconWrapper, { backgroundColor: 'rgba(255, 69, 58, 0.15)' }]}>
+            <Ionicons name="flame" size={24} color="#FF453A" />
+          </View>
         </View>
       </View>
 
@@ -700,6 +783,28 @@ export default function StreakScreen() {
             </View>
             <Ionicons name="chevron-forward" size={16} color={theme.textTertiary} />
           </TouchableOpacity>
+
+          {/* Check for OTA Updates */}
+          <TouchableOpacity
+            onPress={handleCheckForUpdates}
+            disabled={isCheckingUpdate}
+            style={[styles.actionBtn, { borderTopColor: theme.border, borderTopWidth: StyleSheet.hairlineWidth }]}
+          >
+            {isCheckingUpdate ? (
+              <ActivityIndicator size="small" color="#E05368" style={{ marginRight: 2 }} />
+            ) : (
+              <Ionicons name="cloud-download-outline" size={18} color="#E05368" />
+            )}
+            <View style={{ flex: 1, marginLeft: 10 }}>
+              <Text style={[styles.actionBtnTitle, { color: theme.text }]}>
+                {isCheckingUpdate ? (updateStatusText || 'Checking for Updates...') : 'Check for App Updates'}
+              </Text>
+              <Text style={[styles.actionBtnSub, { color: theme.textSecondary }]}>
+                Instantly download & apply the latest Over-The-Air release
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={theme.textTertiary} />
+          </TouchableOpacity>
         </IOSCard>
       </ScrollView>
     </SafeAreaView>
@@ -728,6 +833,25 @@ const styles = StyleSheet.create({
     fontSize: 32,
     fontWeight: '800',
     letterSpacing: -0.6,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  otaHeaderBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 7,
+    paddingHorizontal: 11,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  otaHeaderBtnText: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    letterSpacing: -0.2,
   },
   flameIconWrapper: {
     width: 44,
