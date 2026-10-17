@@ -41,6 +41,8 @@ interface FitnessContextValue {
     title: string;
     category: HabitCategory;
     frequency?: HabitFrequency;
+    specificDays?: number[];
+    targetDate?: string;
     icon?: string;
     color?: string;
     notes?: string;

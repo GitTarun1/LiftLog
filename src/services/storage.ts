@@ -323,6 +323,8 @@ export const FitnessStorage = {
     title: string;
     category: HabitCategory;
     frequency?: HabitFrequency;
+    specificDays?: number[];
+    targetDate?: string;
     icon?: string;
     color?: string;
     notes?: string;
@@ -333,6 +335,8 @@ export const FitnessStorage = {
       title: habitData.title.trim(),
       category: habitData.category,
       frequency: habitData.frequency || 'daily',
+      specificDays: habitData.specificDays,
+      targetDate: habitData.targetDate,
       icon: habitData.icon,
       color: habitData.color,
       notes: habitData.notes?.trim(),
@@ -342,6 +346,37 @@ export const FitnessStorage = {
     const updated = [newHabit, ...habits];
     await AsyncStorage.setItem(STORAGE_KEYS.HABITS, JSON.stringify(updated));
     return newHabit;
+  },
+
+  isHabitScheduledForDate(habit: Habit, date: Date | string): boolean {
+    const dObj = typeof date === 'string' ? new Date(`${date}T00:00:00`) : date;
+    const dayOfWeek = dObj.getDay(); // 0 = Sun, 1 = Mon, ..., 6 = Sat
+    const dateStr = typeof date === 'string'
+      ? date
+      : `${dObj.getFullYear()}-${String(dObj.getMonth() + 1).padStart(2, '0')}-${String(dObj.getDate()).padStart(2, '0')}`;
+
+    // If marked completed on this date, always show in history
+    if (habit.completedDates && habit.completedDates.includes(dateStr)) {
+      return true;
+    }
+
+    switch (habit.frequency) {
+      case 'daily':
+        return true;
+      case 'weekdays':
+        return dayOfWeek >= 1 && dayOfWeek <= 5;
+      case 'weekends':
+        return dayOfWeek === 0 || dayOfWeek === 6;
+      case 'specific_days':
+        if (Array.isArray(habit.specificDays) && habit.specificDays.length > 0) {
+          return habit.specificDays.includes(dayOfWeek);
+        }
+        return true;
+      case 'particular_date':
+        return habit.targetDate === dateStr;
+      default:
+        return true;
+    }
   },
 
   async toggleHabitCompletion(id: string, dateStr?: string): Promise<Habit[]> {

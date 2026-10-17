@@ -80,13 +80,21 @@ export interface StreakStats {
 }
 
 export type HabitCategory = 'fitness' | 'nutrition' | 'wellness' | 'daily' | 'other';
-export type HabitFrequency = 'daily' | 'weekdays' | 'weekends';
+
+export type HabitFrequency =
+  | 'daily'
+  | 'weekdays'
+  | 'weekends'
+  | 'specific_days'
+  | 'particular_date';
 
 export interface Habit {
   id: string;
   title: string;
   category: HabitCategory;
   frequency: HabitFrequency;
+  specificDays?: number[]; // [0 = Sun, 1 = Mon, ..., 6 = Sat]
+  targetDate?: string; // 'YYYY-MM-DD' for a one-time particular day
   icon?: string;
   color?: string;
   notes?: string;
