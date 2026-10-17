@@ -50,6 +50,7 @@ interface FitnessContextValue {
   toggleHabit: (id: string, dateStr?: string) => Promise<void>;
   deleteHabit: (id: string) => Promise<void>;
   updateHabit: (habit: Habit) => Promise<void>;
+  reorderHabits: (habits: Habit[]) => Promise<void>;
   updatePreferences: (prefs: Partial<UserPreferences>) => Promise<void>;
   refreshData: () => Promise<void>;
 }
@@ -165,6 +166,8 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
     title: string;
     category: HabitCategory;
     frequency?: HabitFrequency;
+    specificDays?: number[];
+    targetDate?: string;
     icon?: string;
     color?: string;
     notes?: string;
@@ -187,6 +190,11 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const updateHabit = async (habit: Habit) => {
     await FitnessStorage.updateHabit(habit);
     setHabits((prev) => prev.map((h) => (h.id === habit.id ? habit : h)));
+  };
+
+  const reorderHabits = async (newHabits: Habit[]) => {
+    setHabits(newHabits);
+    await FitnessStorage.reorderHabits(newHabits);
   };
 
   const updatePreferences = async (prefs: Partial<UserPreferences>) => {
@@ -214,6 +222,7 @@ export const FitnessProvider: React.FC<{ children: React.ReactNode }> = ({ child
         toggleHabit,
         deleteHabit,
         updateHabit,
+        reorderHabits,
         updatePreferences,
         refreshData: loadAll,
       }}

@@ -278,25 +278,30 @@ export default function StreakScreen() {
   const isDarkMode = theme.text === '#FFFFFF';
 
   // Volume Level Color Resolver — 5 tiers like GitHub/LeetCode
-  const getBoxColor = (level: number, isFutureCell = false) => {
-    if (isFutureCell) return 'transparent';
+  const getBoxColor = (level: number) => {
     if (isDarkMode) {
       switch (level) {
-        case 1: return 'rgba(48, 209, 88, 0.22)';  // very light green
-        case 2: return 'rgba(48, 209, 88, 0.48)';  // medium green
+        case 1: return 'rgba(48, 209, 88, 0.30)';  // faint green
+        case 2: return 'rgba(48, 209, 88, 0.56)';  // medium green
         case 3: return '#30D158';                   // solid iOS green
-        case 4: return '#26EE68';                   // bright neon green
-        default: return '#1E1E22';                  // dark empty cell
+        case 4: return '#1EFF6E';                   // bright neon green
+        default: return '#252528';                  // empty cell — slightly lighter than card
       }
     } else {
       switch (level) {
-        case 1: return 'rgba(52, 199, 89, 0.22)';
-        case 2: return 'rgba(52, 199, 89, 0.55)';
+        case 1: return 'rgba(52, 199, 89, 0.28)';
+        case 2: return 'rgba(52, 199, 89, 0.58)';
         case 3: return '#34C759';
         case 4: return '#1A7F37';
-        default: return '#E0E0E5';
+        default: return '#E8E8ED';                  // empty cell — slightly darker than card
       }
     }
+  };
+
+  // Border color for empty cells to create visible grid
+  const getBoxBorderColor = (level: number) => {
+    if (level > 0) return 'transparent';
+    return isDarkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.08)';
   };
 
   const formatInspectedDate = (dateStr: string) => {
@@ -509,6 +514,7 @@ export default function StreakScreen() {
 
                         const isInspected = day.dateStr === inspectedDayStr;
                         const boxBg = getBoxColor(day.level);
+                        const boxBorder = getBoxBorderColor(day.level);
 
                         return (
                           <TouchableOpacity
@@ -517,13 +523,17 @@ export default function StreakScreen() {
                             onPress={() => setInspectedDayStr(day.dateStr)}
                             style={[
                               styles.dayBox,
-                              { backgroundColor: boxBg },
+                              {
+                                backgroundColor: boxBg,
+                                borderColor: boxBorder,
+                                borderWidth: day.level === 0 ? 1 : 0,
+                              },
                               day.isToday && day.count === 0 && {
-                                borderColor: theme.tint,
+                                borderColor: '#E05368',
                                 borderWidth: 1.5,
                               },
                               isInspected && {
-                                borderColor: isDarkMode ? 'rgba(255,255,255,0.9)' : '#007AFF',
+                                borderColor: isDarkMode ? 'rgba(255,255,255,0.9)' : 'rgba(0,0,0,0.5)',
                                 borderWidth: 2,
                                 transform: [{ scale: 1.2 }],
                                 zIndex: 10,
@@ -537,6 +547,30 @@ export default function StreakScreen() {
                 </View>
               </View>
             </ScrollView>
+          </View>
+
+          {/* Green Scale Legend */}
+          <View style={[styles.heatmapLegendRow, { borderTopColor: theme.border }]}>
+            <Text style={[styles.legendStatsText, { color: theme.textSecondary }]}>
+              {streakStats.totalWorkoutDays} active days in 24 weeks
+            </Text>
+            <View style={styles.legendScale}>
+              <Text style={[styles.legendScaleText, { color: theme.textSecondary }]}>Less</Text>
+              {[0, 1, 2, 3, 4].map((lvl) => (
+                <View
+                  key={lvl}
+                  style={[
+                    styles.legendBox,
+                    {
+                      backgroundColor: getBoxColor(lvl),
+                      borderWidth: lvl === 0 ? 1 : 0,
+                      borderColor: getBoxBorderColor(lvl),
+                    },
+                  ]}
+                />
+              ))}
+              <Text style={[styles.legendScaleText, { color: theme.textSecondary }]}>More</Text>
+            </View>
           </View>
         </IOSCard>
 
@@ -559,7 +593,7 @@ export default function StreakScreen() {
                       </Text>
                       {log.notes ? (
                         <Text style={[styles.logNotes, { color: theme.textSecondary }]}>
-                          &ldquo;{log.notes}&rdquo;
+                          "{log.notes}"
                         </Text>
                       ) : null}
                     </View>

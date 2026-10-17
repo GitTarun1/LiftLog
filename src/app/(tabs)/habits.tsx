@@ -19,6 +19,7 @@ import { useFitness } from '@/context/FitnessContext';
 import { useTheme } from '@/hooks/use-theme';
 import { FitnessStorage } from '@/services/storage';
 import { Habit, HabitCategory, HabitFrequency } from '@/types/fitness';
+import { DraggableHabitList } from '@/components/DraggableHabitList';
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -68,7 +69,8 @@ export default function HabitsScreen() {
   const bottomInset = insets.bottom > 0 ? insets.bottom : Platform.OS === 'android' ? 12 : 8;
   const screenWidth = Dimensions.get('window').width;
 
-  const { habits, addHabit, toggleHabit, deleteHabit } = useFitness();
+  const { habits, addHabit, toggleHabit, deleteHabit, reorderHabits } = useFitness();
+  const [isDraggingHabit, setIsDraggingHabit] = useState(false);
 
   // Active date tracking
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
@@ -246,6 +248,25 @@ export default function HabitsScreen() {
       },
     ]);
   };
+
+  const handleReorderHabits = useCallback(
+    async (reorderedFiltered: Habit[]) => {
+      if (habits.length === reorderedFiltered.length) {
+        await reorderHabits(reorderedFiltered);
+        return;
+      }
+      const filteredIds = new Set(reorderedFiltered.map((h) => h.id));
+      let filteredIdx = 0;
+      const newAllHabits = habits.map((h) => {
+        if (filteredIds.has(h.id)) {
+          return reorderedFiltered[filteredIdx++];
+        }
+        return h;
+      });
+      await reorderHabits(newAllHabits);
+    },
+    [habits, reorderHabits]
+  );
 
   const toggleSpecificDay = (dayIndex: number) => {
     if (selectedSpecificDays.includes(dayIndex)) {
@@ -551,6 +572,7 @@ export default function HabitsScreen() {
 
       {/* Habit List */}
       <ScrollView
+        scrollEnabled={!isDraggingHabit}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: 60 + bottomInset }]}
         showsVerticalScrollIndicator={false}
       >
@@ -583,82 +605,16 @@ export default function HabitsScreen() {
 
         {/* Thin Strips Habit List */}
         {filteredHabits.length > 0 ? (
-          <View style={styles.thinStripsContainer}>
-            {filteredHabits.map((item) => {
-              const isCompleted = (item.completedDates || []).includes(selectedDateStr);
-              const cardBg = isDarkMode ? '#161618' : '#FFFFFF';
-              const iconColor = item.color || '#3858D6';
-
-              return (
-                <TouchableOpacity
-                  key={item.id}
-                  activeOpacity={0.75}
-                  onPress={() => toggleHabit(item.id, selectedDateStr)}
-                  onLongPress={() => confirmDelete(item)}
-                  style={[
-                    styles.thinStrip,
-                    {
-                      backgroundColor: cardBg,
-                      borderColor: isCompleted
-                        ? 'rgba(48, 209, 88, 0.35)'
-                        : theme.border,
-                    },
-                    isCompleted && styles.thinStripCompleted,
-                  ]}
-                >
-                  {/* Left Compact Icon */}
-                  <View
-                    style={[
-                      styles.compactIconBox,
-                      {
-                        backgroundColor: isCompleted
-                          ? 'rgba(48, 209, 88, 0.12)'
-                          : `${iconColor}22`,
-                      },
-                    ]}
-                  >
-                    <Ionicons
-                      name={item.icon as any || 'bicycle-outline'}
-                      size={18}
-                      color={isCompleted ? '#30D158' : iconColor}
-                    />
-                  </View>
-
-                  {/* Task Name with Aesthetic Strike-off */}
-                  <View style={styles.stripTitleWrapper}>
-                    <Text
-                      style={[
-                        styles.stripTitle,
-                        { color: isCompleted ? theme.textSecondary : theme.text },
-                        isCompleted && styles.stripTitleStrikethrough,
-                      ]}
-                      numberOfLines={1}
-                    >
-                      {item.title}
-                    </Text>
-                  </View>
-
-                  {/* Right side circular completion button */}
-                  <View
-                    style={[
-                      styles.checkCircle,
-                      isCompleted
-                        ? [styles.checkCircleActive, { backgroundColor: '#30D158' }]
-                        : [
-                            styles.checkCircleInactive,
-                            {
-                              borderColor: isDarkMode ? '#38383A' : '#D1D1D6',
-                              backgroundColor: isDarkMode ? '#1E1E22' : '#F2F2F7',
-                            },
-                          ],
-                    ]}
-                  >
-                    {isCompleted && <Ionicons name="checkmark" size={13} color="#FFFFFF" />}
-                  </View>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+          <DraggableHabitList
+            habits={filteredHabits}
+            selectedDateStr={selectedDateStr}
+            isDarkMode={isDarkMode}
+            theme={theme}
+            onToggleHabit={toggleHabit}
+            onDeleteHabit={confirmDelete}
+            onReorder={handleReorderHabits}
+            onDragStateChange={setIsDraggingHabit}
+          />
         ) : (
           <View style={styles.emptyContainer}>
             <View style={[styles.emptyIconBox, { backgroundColor: 'rgba(224, 83, 104, 0.12)' }]}>

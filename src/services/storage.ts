@@ -414,6 +414,10 @@ export const FitnessStorage = {
     }
   },
 
+  async reorderHabits(reorderedHabits: Habit[]): Promise<void> {
+    await AsyncStorage.setItem(STORAGE_KEYS.HABITS, JSON.stringify(reorderedHabits));
+  },
+
   calculateHabitStreak(habit: Habit, referenceDateStr?: string): number {
     if (!habit.completedDates || habit.completedDates.length === 0) return 0;
     const completedSet = new Set(habit.completedDates);

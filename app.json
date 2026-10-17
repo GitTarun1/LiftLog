@@ -19,12 +19,12 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#0A0A0C",
+        "backgroundColor": "#182B24",
         "foregroundImage": "./assets/images/android-icon-foreground.png"
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.tarunexpoo.LiftLog",
-      "versionCode": 1,
+      "versionCode": 2,
       "allowBackup": true
     },
     "web": {
@@ -36,7 +36,7 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#208AEF",
+          "backgroundColor": "#182B24",
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
         }

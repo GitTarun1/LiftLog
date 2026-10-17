@@ -53,7 +53,7 @@ export default function TabLayout() {
             <Ionicons
               name={focused ? 'list-circle' : 'list-circle-outline'}
               size={26}
-              color={focused ? '#30D158' : color}
+              color={color}
             />
           ),
         }}
@@ -79,7 +79,7 @@ export default function TabLayout() {
             <Ionicons
               name={focused ? 'flame' : 'flame-outline'}
               size={24}
-              color={focused ? theme.tintFlame : color}
+              color={color}
             />
           ),
         }}

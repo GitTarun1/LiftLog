@@ -272,7 +272,7 @@ export default function ExerciseDetailScreen() {
               </Text>
               {exercise.notes ? (
                 <Text style={[styles.notesText, { color: theme.textSecondary }]}>
-                  &ldquo;{exercise.notes}&rdquo;
+                  "{exercise.notes}"
                 </Text>
               ) : null}
             </View>
@@ -542,7 +542,7 @@ export default function ExerciseDetailScreen() {
               {item.notes ? (
                 <View style={[styles.sessionNotesBox, { backgroundColor: theme.inputBackground }]}>
                   <Text style={[styles.sessionNotesText, { color: theme.textSecondary }]}>
-                    &ldquo;{item.notes}&rdquo;
+                    "{item.notes}"
                   </Text>
                 </View>
               ) : null}
@@ -554,7 +554,7 @@ export default function ExerciseDetailScreen() {
             <View style={styles.emptyContainer}>
               <Ionicons name="barbell-outline" size={40} color={theme.textTertiary} />
               <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
-                No workouts logged yet. Tap &ldquo;Log Workout / Sets&rdquo; above!
+                No workouts logged yet. Tap "Log Workout / Sets" above!
               </Text>
             </View>
           ) : null
